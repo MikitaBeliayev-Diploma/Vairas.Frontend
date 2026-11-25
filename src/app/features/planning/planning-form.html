@@ -1,0 +1,126 @@
+﻿<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="form-grid">
+    <div class="field">
+      <label for="planning-enrollment">Learner enrollment</label
+      ><p-multiselect
+        inputId="planning-enrollment"
+        ariaLabel="Learner enrollment"
+        formControlName="enrollmentIds"
+        [options]="catalog().enrollments"
+        optionLabel="name"
+        optionValue="enrollmentId"
+        placeholder="Select a learner"
+      />
+      @if (form.controls.enrollmentIds.touched && form.controls.enrollmentIds.invalid) {
+        <small class="field-error">Select a learner.</small>
+      }
+    </div>
+    <div class="field">
+      <label for="planning-teacher">Instructor</label
+      ><p-multiselect
+        inputId="planning-teacher"
+        ariaLabel="Instructor"
+        formControlName="teacherIds"
+        [options]="catalog().teachers"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Select an instructor"
+      />
+    </div>
+    <div class="field">
+      <label for="planning-vehicle">Vehicle</label
+      ><p-multiselect
+        inputId="planning-vehicle"
+        ariaLabel="Vehicle"
+        formControlName="vehicleIds"
+        [options]="catalog().vehicles"
+        optionLabel="label"
+        optionValue="id"
+        placeholder="Select a vehicle"
+      />
+    </div>
+    <div class="field">
+      <label for="planning-groups">Training groups</label>
+      <p-multiselect
+        inputId="planning-groups"
+        ariaLabel="Training groups"
+        formControlName="groupIds"
+        [options]="catalog().groups ?? []"
+        optionLabel="name"
+        optionValue="id"
+      />
+    </div>
+    <div class="field">
+      <label for="planning-start">Window starts · Vilnius</label
+      ><input pInputText id="planning-start" type="datetime-local" formControlName="startsAt" />
+    </div>
+    <div class="field">
+      <label for="planning-end">Window ends · Vilnius</label
+      ><input pInputText id="planning-end" type="datetime-local" formControlName="endsAt" />
+    </div>
+  </div>
+  <div class="form-grid">
+    <div class="field">
+      <label for="planning-period-start">Planning period starts</label
+      ><input pInputText id="planning-period-start" type="date" formControlName="planningStart" />
+    </div>
+    <div class="field">
+      <label for="planning-period-end">Planning period ends</label
+      ><input pInputText id="planning-period-end" type="date" formControlName="planningEnd" />
+    </div>
+  </div>
+  @for (window of extraWindows.controls; track window; let index = $index) {
+    <div class="form-grid" [formGroup]="window">
+      <div class="field">
+        <label [for]="'extra-start-' + index">Additional window start · Vilnius</label
+        ><input
+          pInputText
+          [id]="'extra-start-' + index"
+          type="datetime-local"
+          formControlName="startsAt"
+        />
+      </div>
+      <div class="field">
+        <label [for]="'extra-end-' + index">Additional window end · Vilnius</label
+        ><input
+          pInputText
+          [id]="'extra-end-' + index"
+          type="datetime-local"
+          formControlName="endsAt"
+        />
+      </div>
+      <p-button
+        type="button"
+        label="Remove window"
+        severity="secondary"
+        [disabled]="busy()"
+        (onClick)="removeWindow(index)"
+      />
+    </div>
+  }
+  <p-button
+    type="button"
+    label="Add availability window"
+    [disabled]="busy()"
+    (onClick)="addWindow()"
+  />
+  @if (error()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+  <div class="form-footer">
+    <p>
+      Scheduling checks legal rules, school rules and resource conflicts when it generates the
+      proposal.
+    </p>
+    <div class="flex gap-2 flex-wrap">
+      <p-button
+        type="button"
+        label="Save incomplete draft"
+        [text]="true"
+        severity="secondary"
+        [disabled]="busy()"
+        (onClick)="savePartial()"
+      /><p-button type="submit" label="Save draft" [loading]="busy()" />
+    </div>
+  </div>
+</form>

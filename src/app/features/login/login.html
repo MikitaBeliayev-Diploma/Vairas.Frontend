@@ -1,0 +1,166 @@
+﻿<div class="login-theme-control"><app-theme-toggle /></div>
+<div class="login-layout">
+  <section class="login-story">
+    <a class="brand" href="/"
+      ><span class="brand-mark"><app-icon name="car" /></span
+      ><span>vairas<span class="brand-period">.</span></span></a
+    >
+    <div>
+      <p class="eyebrow">DRIVING SCHOOL PLATFORM</p>
+      <h1>Every lesson.<br />One clear path.</h1>
+      <p>Plan with confidence. Record what matters.<br />Keep your training moving forward.</p>
+      <div class="login-road" aria-hidden="true"><span></span><app-icon name="car" /></div>
+    </div>
+    <small>Scheduling · Training records · AI Assistance</small>
+  </section>
+  <main class="login-form">
+    <div class="login-card">
+      <p class="eyebrow">WELCOME TO VAIRAS</p>
+      <h2>
+        @switch (mode()) {
+          @case ('register') {
+            Create your account
+          }
+          @case ('forgot') {
+            Reset your password
+          }
+          @case ('verify') {
+            Verify your e-mail
+          }
+          @case ('reset') {
+            Choose a new password
+          }
+          @default {
+            Welcome back
+          }
+        }
+      </h2>
+      <p class="muted">
+        @if (mode() === 'register') {
+          Register with your e-mail. Your school adds you to its workspace after you sign in.
+        } @else if (mode() === 'forgot') {
+          We will send a reset link if an account exists for this address.
+        } @else if (mode() === 'verify') {
+          Confirm the e-mail address for your new Vairas account.
+        } @else if (mode() === 'reset') {
+          Use 12 to 128 characters.
+        } @else {
+          Sign in with your school account to continue.
+        }
+      </p>
+      @if (feedback.error()) {
+        <div class="feedback error" role="alert">{{ feedback.error() }}</div>
+      }
+      @if (notice()) {
+        <div class="feedback success" role="status">{{ notice() }}</div>
+      }
+      @if (error()) {
+        <div class="feedback error" role="alert">{{ error() }}</div>
+      }
+      @if (mode() === 'verify') {
+        <p-button label="Verify e-mail" [loading]="working()" (onClick)="verify()" />
+        <p-button
+          type="button"
+          [text]="true"
+          label="Back to sign in"
+          (onClick)="switch('signin')"
+        />
+      } @else if (mode() === 'reset') {
+        <form [formGroup]="resetForm" (ngSubmit)="resetPassword()">
+          <div class="field">
+            <label for="new-password">New password</label
+            ><input
+              pInputText
+              id="new-password"
+              type="password"
+              autocomplete="new-password"
+              formControlName="password"
+            />
+            @if (resetForm.controls.password.touched && resetForm.controls.password.invalid) {
+              <small class="field-error">Use 12 to 128 characters.</small>
+            }
+          </div>
+          <div class="field">
+            <label for="repeat-password">Repeat password</label
+            ><input
+              pInputText
+              id="repeat-password"
+              type="password"
+              autocomplete="new-password"
+              formControlName="repeat"
+            />
+          </div>
+          <p-button type="submit" label="Change password" [loading]="working()" />
+        </form>
+      } @else {
+        <form [formGroup]="form" (ngSubmit)="submit()">
+          <div class="field">
+            <label for="email">E-mail</label
+            ><input
+              pInputText
+              id="email"
+              type="email"
+              autocomplete="username"
+              formControlName="email"
+            />
+            @if (form.controls.email.touched && form.controls.email.invalid) {
+              <small class="field-error">Enter a valid e-mail address.</small>
+            }
+          </div>
+          @if (mode() !== 'forgot') {
+            <div class="field">
+              <label for="password">Password</label
+              ><input
+                pInputText
+                id="password"
+                type="password"
+                [attr.autocomplete]="mode() === 'register' ? 'new-password' : 'current-password'"
+                formControlName="password"
+              />
+              @if (form.controls.password.touched && form.controls.password.invalid) {
+                <small class="field-error">{{
+                  mode() === 'register' ? 'Use 12 to 128 characters.' : 'Password is required.'
+                }}</small>
+              }
+            </div>
+          }
+          <p-button
+            type="submit"
+            [label]="
+              mode() === 'register'
+                ? 'Create account'
+                : mode() === 'forgot'
+                  ? 'Send reset link'
+                  : 'Sign in'
+            "
+            [loading]="auth.busy() || working()"
+          />
+          <div class="login-links">
+            @if (mode() === 'signin') {
+              <p-button
+                type="button"
+                [text]="true"
+                label="Create an account"
+                (onClick)="switch('register')"
+              />
+              <p-button
+                type="button"
+                [text]="true"
+                label="Forgot password?"
+                (onClick)="switch('forgot')"
+              />
+            } @else {
+              <p-button
+                type="button"
+                [text]="true"
+                label="Back to sign in"
+                (onClick)="switch('signin')"
+              />
+            }
+          </div>
+        </form>
+      }
+      <p class="login-footnote">Your school. Your role. Your authorized workspace.</p>
+    </div>
+  </main>
+</div>

@@ -1,0 +1,72 @@
+<section class="action-preview">
+  <div class="preview-heading">
+    <span class="eyebrow">YOUR CONFIRMATION IS REQUIRED</span>
+    <h3>
+      {{
+        preview().kind === 'Booking' ? 'Book a practical lesson' : 'Reschedule a practical lesson'
+      }}
+    </h3>
+    <p>No change is made until you confirm these exact details.</p>
+  </div>
+  <dl class="details-grid">
+    <div>
+      <dt>School</dt>
+      <dd>{{ school()?.name ?? 'Selected school' }}</dd>
+    </div>
+    <div>
+      <dt>Learner</dt>
+      <dd>
+        {{ enrollment()?.name ?? 'Selected enrollment' }} · {{ preview().arguments.category }}
+      </dd>
+    </div>
+    <div>
+      <dt>Instructor</dt>
+      <dd>{{ teacher()?.name ?? 'Selected instructor' }}</dd>
+    </div>
+    <div>
+      <dt>Vehicle</dt>
+      <dd>{{ vehicle()?.label ?? 'Selected vehicle' }}</dd>
+    </div>
+    <div>
+      <dt>Starts · Vilnius</dt>
+      <dd>{{ preview().arguments.startsAt | schoolDate }}</dd>
+    </div>
+    <div>
+      <dt>Ends · Vilnius</dt>
+      <dd>{{ preview().arguments.endsAt | schoolDate }}</dd>
+    </div>
+  </dl>
+  @if (completed()) {
+    <p class="feedback success" role="status">Action committed successfully.</p>
+  } @else if (expired() || invalidated()) {
+    <p class="feedback error" role="status">
+      This preview can no longer be confirmed. Request a new one.
+    </p>
+  } @else {
+    <label class="approval-check"
+      ><input
+        type="checkbox"
+        [ngModel]="checked()"
+        (ngModelChange)="checked.set($event)"
+        [disabled]="busy()"
+      />I reviewed these details and approve this exact action.</label
+    >
+    <div class="flex gap-3 flex-wrap">
+      <p-button
+        label="Confirm this action"
+        [disabled]="!checked() || busy()"
+        [loading]="busy()"
+        (onClick)="confirm()"
+      /><p-button
+        label="Cancel preview"
+        severity="secondary"
+        [disabled]="busy()"
+        (onClick)="cancelled.emit()"
+      />
+    </div>
+    <small class="muted"
+      >Preview expires {{ preview().expiresAt | schoolDate: 'time' }}. Availability is rechecked at
+      commit.</small
+    >
+  }
+</section>

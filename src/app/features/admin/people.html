@@ -1,0 +1,194 @@
+﻿<app-page-header
+  eyebrow="ADMINISTRATION"
+  heading="People & invitations"
+  description="School memberships, teacher resources and invitations. People join by accepting an invitation for their user ID."
+>
+  <p-button label="Invite by user ID" (onClick)="inviteOpen.set(true)" />
+</app-page-header>
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>Memberships</h2>
+      <p class="muted">
+        Permissions such as Assessor and SchoolRuleOwner are granted by the platform operator.
+      </p>
+    </div>
+    <label class="approval-check"
+      ><input type="checkbox" [checked]="showEnded()" (change)="showEnded.set(!showEnded())" /> Show
+      ended</label
+    >
+  </div>
+  <app-async-state
+    [loading]="members.loading()"
+    [error]="members.failed()"
+    (retry)="members.load()"
+  />
+  @if (!members.loading() && !members.failed()) {
+    <p-table [value]="visibleMembers()" [paginator]="visibleMembers().length > 15" [rows]="15">
+      <ng-template #header>
+        <tr>
+          <th>Person</th>
+          <th>Role</th>
+          <th>Since</th>
+          <th>Status</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-row>
+        <tr>
+          <td>
+            <strong>{{
+              isMe(row) ? auth.session()?.name + ' (you)' : 'User ' + shortId(row.userId)
+            }}</strong
+            ><br /><small class="muted">{{ row.userId }}</small>
+            @if (teacherOf(row); as t) {
+              <br /><small class="muted">Teacher ID {{ t.teacherId }}</small>
+            }
+          </td>
+          <td>{{ row.role }}</td>
+          <td>{{ row.startedAt | schoolDate: 'date' }}</td>
+          <td><app-status [value]="row.endedAt ? 'Ended' : 'Active'" /></td>
+          <td class="table-actions">
+            @if (!row.endedAt && !isMe(row) && row.role !== 'Student') {
+              <p-button
+                label="End membership"
+                size="small"
+                [text]="true"
+                severity="danger"
+                [disabled]="m.busy()"
+                (onClick)="endTarget.set(row)"
+              />
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5">No memberships.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+</section>
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>School invitations</h2>
+      <p class="muted">Invitations expire after 24 hours unless accepted.</p>
+    </div>
+    <p-button label="Refresh" severity="secondary" [text]="true" (onClick)="refreshInvitations()" />
+  </div>
+  <app-async-state
+    [loading]="invitations.loading()"
+    [error]="invitations.failed()"
+    [empty]="!invitations.loading() && !invitations.failed() && !invitations.value().length"
+    title="No invitations found"
+    description="Authorized invitations for this school appear here."
+    (retry)="invitations.load()"
+  />
+  @if (nextInvitationCursor()) {
+    <p-button
+      label="Next invitations"
+      [disabled]="invitations.loading()"
+      (onClick)="nextInvitations()"
+    />
+  }
+  <div class="record-list">
+    @for (i of invitations.value(); track i.invitationId) {
+      <div class="record-row">
+        <div>
+          <strong>{{ i.role }} · user {{ shortId(i.targetUserId) }}</strong
+          ><small
+            >Issued {{ i.createdAt | schoolDate }} · expires {{ i.expiresAt | schoolDate }}</small
+          >
+        </div>
+        <app-status [value]="i.effectiveStatus || i.status" />
+        @if (i.status === 'Pending') {
+          <p-button
+            label="Revoke"
+            size="small"
+            [text]="true"
+            severity="danger"
+            (onClick)="revokeTarget.set(i)"
+          />
+        }
+      </div>
+    }
+  </div>
+</section>
+
+<p-dialog
+  header="Invite by user ID"
+  [visible]="inviteOpen()"
+  (visibleChange)="inviteOpen.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="inviteForm" (ngSubmit)="invite()">
+    <p class="muted">The person finds their user ID on the Get started page after signing up.</p>
+    <div class="field">
+      <label for="invite-user">User ID</label
+      ><input pInputText id="invite-user" formControlName="targetUserId" placeholder="UUID" />
+      @if (inviteForm.controls.targetUserId.touched && inviteForm.controls.targetUserId.invalid) {
+        <small class="field-error">Enter a valid user ID (UUID).</small>
+      }
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="invite-role">Role</label
+        ><select id="invite-role" class="native-select" formControlName="role">
+          @for (r of roles; track r) {
+            <option [value]="r">{{ r }}</option>
+          }
+        </select>
+      </div>
+      @if (inviteForm.controls.role.value === 'Student') {
+        <div class="field">
+          <label for="invite-category">Licence category</label
+          ><select id="invite-category" class="native-select" formControlName="categoryCode">
+            <option value="">None</option>
+            @for (c of categories; track c) {
+              <option [value]="c">{{ c }}</option>
+            }
+          </select>
+        </div>
+      }
+    </div>
+    <p-button type="submit" label="Issue invitation" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="Revoke invitation"
+  [visible]="!!revokeTarget()"
+  (visibleChange)="!$event && revokeTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="revokeForm" (ngSubmit)="revoke()">
+    <div class="field">
+      <label for="revoke-reason">Reason</label
+      ><textarea pInputText id="revoke-reason" rows="3" formControlName="reason"></textarea>
+    </div>
+    <p-button type="submit" label="Revoke" severity="danger" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="End membership"
+  [visible]="!!endTarget()"
+  (visibleChange)="!$event && endTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <p>
+    The person loses access to this school. Future lessons may need review under Reviews & audit.
+  </p>
+  <p-button
+    label="End membership"
+    severity="danger"
+    [loading]="m.busy()"
+    (onClick)="endMembership()"
+  />
+</p-dialog>

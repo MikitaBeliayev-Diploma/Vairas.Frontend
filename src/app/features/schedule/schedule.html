@@ -1,0 +1,227 @@
+﻿<app-page-header
+  heading="Schedule"
+  description="Your lessons and training commitments, in one place."
+>
+  @if (auth.has('Administrator')) {
+    <p-button
+      label="Book a lesson"
+      [disabled]="!auth.catalog() || !!pending()"
+      (onClick)="bookingError.set(''); dialog.set(true)"
+    />
+  }
+</app-page-header>
+@if (pending(); as operation) {
+  <div class="feedback error" role="status">
+    <div>
+      <strong>Booking outcome needs reconciliation</strong>
+      <p>
+        Operation {{ operation.operationId }} · {{ operation.status }}. Do not submit another
+        booking.
+      </p>
+    </div>
+    <p-button label="Check operation" [loading]="busy()" (onClick)="reconcile()" />
+  </div>
+}
+<section class="panel">
+  <div class="toolbar">
+    <div>
+      <label class="sr-only" for="lesson-search">Search lessons</label
+      ><input
+        pInputText
+        id="lesson-search"
+        placeholder="Search lessons, instructor or learner"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
+    </div>
+    <div class="segmented" aria-label="Lesson status">
+      @for (value of ['All', 'Scheduled', 'Completed', 'Cancelled']; track value) {
+        <button
+          [class.selected]="status() === value"
+          [attr.aria-pressed]="status() === value"
+          (click)="status.set(value)"
+        >
+          {{ value }}
+        </button>
+      }
+    </div>
+  </div>
+  <app-async-state [loading]="store.loading()" [error]="store.failed()" (retry)="store.load()" />
+  @if (!store.loading() && !store.failed()) {
+    <p-table [value]="filtered()" [paginator]="true" [rows]="8" dataKey="lessonId"
+      ><ng-template #header
+        ><tr>
+          <th>Lesson</th>
+          <th>When · Vilnius</th>
+          <th>Instructor & resource</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr></ng-template
+      ><ng-template #body let-lesson
+        ><tr>
+          <td>
+            <strong>{{ lesson.title ?? lesson.kind + ' lesson' }}</strong
+            ><small
+              >{{ lesson.kind }}{{ lesson.studentName ? ' · ' + lesson.studentName : '' }}</small
+            >
+            @if (lesson.reason) {
+              <small class="lesson-reason">Reason: {{ lesson.reason }}</small>
+            }
+          </td>
+          <td>
+            {{ lesson.startsAt | schoolDate: 'date'
+            }}<small
+              >{{ lesson.startsAt | schoolDate: 'time' }} –
+              {{ lesson.endsAt | schoolDate: 'time' }}</small
+            >
+          </td>
+          <td>
+            {{ lesson.teacherName }}<small>{{ lesson.vehicleLabel }}</small>
+          </td>
+          <td><app-status [value]="lesson.status" /></td>
+          <td>
+            <div class="table-actions">
+              @if (canManage(lesson)) {
+                <p-button
+                  label="Reschedule"
+                  [text]="true"
+                  size="small"
+                  [disabled]="!!pending()"
+                  (onClick)="open(lesson, 'reschedule')"
+                /><p-button
+                  label="Cancel"
+                  severity="danger"
+                  [text]="true"
+                  size="small"
+                  [disabled]="!!pending()"
+                  (onClick)="open(lesson, 'cancel')"
+                />
+              }
+              @if (canComplete(lesson)) {
+                <p-button
+                  label="Complete lesson"
+                  [text]="true"
+                  size="small"
+                  (onClick)="open(lesson, 'complete')"
+                />
+              }
+              @if (canCorrect(lesson)) {
+                <p-button
+                  label="Correct actual time"
+                  [text]="true"
+                  size="small"
+                  (onClick)="open(lesson, 'correct')"
+                />
+              }
+              @if (
+                lesson.kind === 'Theory' &&
+                lesson.status === 'Completed' &&
+                auth.has('Administrator', 'Instructor')
+              ) {
+                <a
+                  [routerLink]="['/theory-lessons', lesson.lessonId, 'attendance']"
+                  class="text-link"
+                  >Review attendance</a
+                >
+              }
+            </div>
+          </td>
+        </tr></ng-template
+      ><ng-template #emptymessage
+        ><tr>
+          <td colspan="5">
+            <app-async-state
+              [empty]="true"
+              title="No matching lessons"
+              description="Try another search or status filter."
+            />
+          </td></tr></ng-template
+    ></p-table>
+  }
+</section>
+<p class="section-note">
+  Times are shown in Europe/Vilnius. Availability is provisional until the owning service commits
+  the booking.
+</p>
+<p-dialog
+  header="Book a lesson"
+  [visible]="dialog()"
+  (visibleChange)="dialog.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!busy() && !pending()"
+>
+  @if (auth.catalog(); as catalog) {
+    <app-booking-form
+      [catalog]="catalog"
+      [schoolId]="auth.session()!.schoolId"
+      [busy]="busy()"
+      [locked]="!!pending()"
+      (booked)="book($event)"
+      (bookedTheory)="bookTheory($event)"
+    />
+    @if (bookingError()) {
+      <p class="field-error" role="alert">{{ bookingError() }}</p>
+    }
+  }
+</p-dialog>
+<p-dialog
+  [header]="
+    action() === 'complete'
+      ? 'Record actual completion'
+      : action() === 'correct'
+        ? 'Correct the actual interval'
+        : action() === 'cancel'
+          ? 'Cancel this lesson'
+          : 'Reschedule this lesson'
+  "
+  [visible]="!!selected()"
+  (visibleChange)="!$event && selected.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!busy() && !pending()"
+  ><form [formGroup]="changeForm" (ngSubmit)="change()">
+    @if (action() !== 'cancel') {
+      <p class="muted">
+        {{
+          action() === 'complete'
+            ? 'Enter the verified actual interval. This does not credit practical minutes.'
+            : action() === 'correct'
+              ? 'Corrections are audited and invalidate dependent training records until re-confirmed.'
+              : 'Review the new interval before applying the change.'
+        }}
+      </p>
+      <div class="field">
+        <label for="change-start">Starts · Vilnius</label
+        ><input pInputText id="change-start" type="datetime-local" formControlName="startsAt" />
+      </div>
+      <div class="field">
+        <label for="change-end">Ends · Vilnius</label
+        ><input pInputText id="change-end" type="datetime-local" formControlName="endsAt" />
+      </div>
+    }
+    <div class="field">
+      <label for="change-reason">Reason</label
+      ><textarea pInputText id="change-reason" formControlName="reason" rows="3"></textarea>
+      @if (changeForm.controls.reason.touched && changeForm.controls.reason.invalid) {
+        <small class="field-error">A reason is required.</small>
+      }
+    </div>
+    @if (localError()) {
+      <p class="field-error" role="alert">{{ localError() }}</p>
+    }
+    <p-button
+      type="submit"
+      [label]="
+        action() === 'complete'
+          ? 'Save actual completion'
+          : action() === 'correct'
+            ? 'Save correction'
+            : action() === 'cancel'
+              ? 'Confirm cancellation'
+              : 'Confirm rescheduling'
+      "
+      [loading]="busy()"
+      [disabled]="!!pending()"
+    /></form
+></p-dialog>

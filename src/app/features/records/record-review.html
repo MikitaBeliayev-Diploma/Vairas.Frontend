@@ -1,0 +1,93 @@
+<section class="panel form-panel">
+  <div class="panel-header">
+    <div>
+      <p class="eyebrow">PRACTICAL RECORD REVIEW</p>
+      <h2>Fact version {{ record().factVersion }}</h2>
+    </div>
+    <app-status [value]="record().status" />
+  </div>
+  <dl class="details-grid">
+    <div>
+      <dt>Teaching time</dt>
+      <dd>{{ record().facts.trainingMinutes }} minutes</dd>
+    </div>
+    <div>
+      <dt>Distance</dt>
+      <dd>{{ record().facts.distanceKm }} km</dd>
+    </div>
+    <div>
+      <dt>Training topics</dt>
+      <dd>{{ topicNames().join(', ') }}</dd>
+    </div>
+    <div>
+      <dt>Instructor response</dt>
+      <dd>
+        @for (response of record().responses; track response.role) {
+          @if (response.role === 'Instructor' && response.factVersion === record().factVersion) {
+            <app-status [value]="response.response" />
+          }
+        }
+        @if (!instructorResponded()) {
+          Pending
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>Student response</dt>
+      <dd>
+        @for (response of record().responses; track response.role) {
+          @if (response.role === 'Student' && response.factVersion === record().factVersion) {
+            <app-status [value]="response.response" />
+          }
+        }
+        @if (!studentResponded()) {
+          Pending
+        }
+      </dd>
+    </div>
+  </dl>
+  <p class="muted">
+    Confirm that these exact facts match the lesson you attended. A correction creates a new version
+    and requires fresh confirmations.
+  </p>
+  @if (alreadyConfirmed()) {
+    <div class="feedback success" role="status">You confirmed this fact version.</div>
+  }
+  @if (canConfirm()) {
+    <p-button
+      [label]="'Confirm fact version ' + record().factVersion"
+      [loading]="busy()"
+      (onClick)="confirm()"
+    />
+  }
+  @if (role() === 'Student' && !['Disputed', 'Invalid'].includes(record().status)) {
+    <div class="dispute-form">
+      <label for="dispute-reason">Something needs correcting?</label
+      ><textarea
+        pInputText
+        id="dispute-reason"
+        rows="3"
+        maxlength="1000"
+        placeholder="Describe the incorrect facts"
+        [ngModel]="reason()"
+        (ngModelChange)="reason.set($event)"
+      ></textarea>
+      @if (error()) {
+        <p class="field-error" role="alert">{{ error() }}</p>
+      }
+      <p-button
+        label="Dispute this version"
+        severity="danger"
+        [outlined]="true"
+        [loading]="busy()"
+        (onClick)="dispute()"
+      />
+    </div>
+  }
+  @if (record().status === 'Disputed') {
+    <div class="feedback error">
+      This version was disputed. An instructor must create corrected facts before it can be
+      confirmed.
+    </div>
+  }
+</section>

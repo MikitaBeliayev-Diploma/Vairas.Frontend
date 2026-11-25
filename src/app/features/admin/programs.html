@@ -1,0 +1,256 @@
+<app-page-header
+  eyebrow="ADMINISTRATION"
+  heading="Training programmes"
+  description="Versioned curricula: required minutes, topics, the final assessment and verified rule sources."
+>
+  <p-button label="Track version by ID" severity="secondary" (onClick)="trackOpen.set(true)" />
+  <p-button label="New programme" (onClick)="programOpen.set(true)" />
+</app-page-header>
+<p class="section-note">
+  Programmes and their retained versions are retrieved from Learning Tracking for the current
+  school.
+</p>
+<app-async-state
+  [loading]="data.loading()"
+  [error]="data.failed()"
+  [empty]="!data.loading() && !data.failed() && !data.value().programs.length"
+  title="No programmes yet"
+  description="Create a programme for a licence category."
+  (retry)="data.load()"
+/>
+@for (program of data.value().programs; track program.programId) {
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">CATEGORY {{ program.categoryCode }}</p>
+        <h2>{{ program.name }}</h2>
+      </div>
+      <p-button
+        label="New version"
+        severity="secondary"
+        (onClick)="openEditor(program, versionsOf(program).at(0) ?? null, true)"
+      />
+    </div>
+    <div class="record-list">
+      @for (v of versionsOf(program); track v.programVersionId) {
+        <div class="record-row">
+          <div>
+            <strong>Version {{ v.version }} · {{ v.curriculum.pathwayCode }}</strong
+            ><small
+              >Theory {{ v.curriculum.requiredTheoryMinutes }} min · practical
+              {{ v.curriculum.requiredPracticalMinutes }} min ·
+              {{ v.curriculum.topics.length }} topics · from {{ v.curriculum.effectiveFrom }}</small
+            >
+            <small class="muted"
+              >ID {{ v.programVersionId }}
+              <button type="button" class="text-link" (click)="copyId(v.programVersionId)">
+                Copy
+              </button></small
+            >
+          </div>
+          <app-status [value]="v.status" />
+          <div class="table-actions">
+            @if (v.status === 'Draft') {
+              <p-button
+                label="Edit"
+                size="small"
+                severity="secondary"
+                (onClick)="openEditor(program, v)"
+              />
+              <p-button
+                label="Publish"
+                size="small"
+                [disabled]="m.busy()"
+                (onClick)="transition(v, 'publish')"
+              />
+            } @else if (v.status === 'Published') {
+              <p-button
+                label="Retire"
+                size="small"
+                [text]="true"
+                severity="danger"
+                [disabled]="m.busy()"
+                (onClick)="transition(v, 'retire')"
+              />
+            }
+          </div>
+        </div>
+      } @empty {
+        <p class="muted">No known versions. Create one or track it by ID.</p>
+      }
+    </div>
+  </section>
+}
+
+<p-dialog
+  header="New programme"
+  [visible]="programOpen()"
+  (visibleChange)="programOpen.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="programForm" (ngSubmit)="createProgram()">
+    <div class="field">
+      <label for="program-name">Name</label
+      ><input pInputText id="program-name" formControlName="name" />
+    </div>
+    <div class="field">
+      <label for="program-category">Licence category</label
+      ><select id="program-category" class="native-select" formControlName="categoryCode">
+        @for (c of categories; track c) {
+          <option [value]="c">{{ c }}</option>
+        }
+      </select>
+    </div>
+    <p-button type="submit" label="Create programme" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="Track a programme version"
+  [visible]="trackOpen()"
+  (visibleChange)="trackOpen.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="trackForm" (ngSubmit)="track()">
+    <div class="field">
+      <label for="track-id">Programme version ID</label
+      ><input pInputText id="track-id" formControlName="versionId" placeholder="UUID" />
+      @if (trackForm.controls.versionId.invalid && trackForm.controls.versionId.touched) {
+        <small class="field-error">Enter a valid version ID.</small>
+      }
+    </div>
+    <p-button type="submit" label="Track" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  [header]="editor()?.version ? 'Edit draft curriculum' : 'New curriculum version'"
+  [visible]="!!editor()"
+  (visibleChange)="!$event && editor.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [style]="{ width: 'min(52rem, 96vw)' }"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="form" (ngSubmit)="saveVersion()">
+    <h3>Requirements</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="c-pathway">Pathway code</label
+        ><input pInputText id="c-pathway" formControlName="pathwayCode" />
+      </div>
+      <div class="field">
+        <label for="c-lesson">Planned lesson length · min</label
+        ><input pInputText id="c-lesson" type="number" formControlName="lessonMinutes" />
+      </div>
+      <div class="field">
+        <label for="c-theory">Required theory · min</label
+        ><input pInputText id="c-theory" type="number" formControlName="requiredTheoryMinutes" />
+      </div>
+      <div class="field">
+        <label for="c-practical">Required practical · min</label
+        ><input
+          pInputText
+          id="c-practical"
+          type="number"
+          formControlName="requiredPracticalMinutes"
+        />
+      </div>
+      <div class="field">
+        <label for="c-tunit">Theory minutes per unit</label
+        ><input pInputText id="c-tunit" type="number" formControlName="theoryMinutesPerUnit" />
+      </div>
+      <div class="field">
+        <label for="c-punit">Practical minutes per unit</label
+        ><input pInputText id="c-punit" type="number" formControlName="practicalMinutesPerUnit" />
+      </div>
+      <div class="field">
+        <label for="c-from">Effective from</label
+        ><input pInputText id="c-from" type="date" formControlName="effectiveFrom" />
+      </div>
+      <div class="field">
+        <label for="c-to">Effective to (optional)</label
+        ><input pInputText id="c-to" type="date" formControlName="effectiveTo" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="c-checklist">Checklist version ID</label
+      ><input pInputText id="c-checklist" formControlName="checklistVersionId" placeholder="UUID" />
+      <small class="muted"
+        >The journal checklist policy configured in Learning Tracking for this category.</small
+      >
+      @if (form.controls.checklistVersionId.touched && form.controls.checklistVersionId.invalid) {
+        <small class="field-error">Enter the checklist version ID (UUID).</small>
+      }
+    </div>
+    <div class="field">
+      <label for="c-topics">Topics — one per line, as “key | name”</label
+      ><textarea pInputText id="c-topics" rows="6" formControlName="topics"></textarea>
+    </div>
+    <h3>Final assessment</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="a-name">Name</label
+        ><input pInputText id="a-name" formControlName="assessmentName" />
+      </div>
+      <div class="field">
+        <label for="a-kind">Training kind</label
+        ><select id="a-kind" class="native-select" formControlName="assessmentKind">
+          <option value="Practical">Practical</option>
+          <option value="Theory">Theory</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="a-min">Minimum mark</label
+        ><input pInputText id="a-min" type="number" formControlName="minimumMark" />
+      </div>
+      <div class="field">
+        <label for="a-max">Maximum mark</label
+        ><input pInputText id="a-max" type="number" formControlName="maximumMark" />
+      </div>
+      <div class="field">
+        <label for="a-pass">Passing mark</label
+        ><input pInputText id="a-pass" type="number" formControlName="passingMark" />
+      </div>
+      <div class="field">
+        <label for="a-req">Readiness: minimum practical minutes</label
+        ><input pInputText id="a-req" type="number" formControlName="minimumPracticalMinutes" />
+      </div>
+    </div>
+    <h3>Rule source</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="s-code">Rule code</label
+        ><input pInputText id="s-code" formControlName="ruleCode" />
+      </div>
+      <div class="field">
+        <label for="s-edition">Edition</label
+        ><input pInputText id="s-edition" formControlName="edition" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="s-uri">Source URL (https)</label
+      ><input pInputText id="s-uri" formControlName="sourceUri" />
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="s-app">Applicability</label
+        ><input pInputText id="s-app" formControlName="applicability" />
+      </div>
+      <div class="field">
+        <label for="s-unit">Unit description</label
+        ><input pInputText id="s-unit" formControlName="unitDescription" />
+      </div>
+    </div>
+    <label class="approval-check"
+      ><input type="checkbox" formControlName="verified" /> I verified this source against the
+      official publication</label
+    >
+    @if (form.touched && form.invalid) {
+      <p class="field-error">Complete all required fields. The source URL must use https.</p>
+    }
+    <p-button type="submit" label="Save draft" [loading]="m.busy()" />
+  </form>
+</p-dialog>

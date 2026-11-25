@@ -1,0 +1,191 @@
+<app-page-header
+  eyebrow="ADMINISTRATION"
+  heading="Vehicles"
+  description="Training vehicles, their licence categories and the teachers allowed to use them."
+>
+  <p-button label="Add vehicle" (onClick)="openEdit('new')" />
+</app-page-header>
+<section class="panel">
+  <app-async-state [loading]="data.loading()" [error]="data.failed()" (retry)="data.load()" />
+  @if (!data.loading() && !data.failed()) {
+    <p-table
+      [value]="data.value().vehicles"
+      [paginator]="data.value().vehicles.length > 10"
+      [rows]="10"
+    >
+      <ng-template #header>
+        <tr>
+          <th>Vehicle</th>
+          <th>Branch</th>
+          <th>Categories</th>
+          <th>Teachers</th>
+          <th>Status</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-v>
+        <tr>
+          <td>
+            <strong>{{ v.registrationNumber }}</strong> ({{
+              v.registrationCountryCode
+            }})<br /><small class="muted"
+              >{{ v.manufacturer }} {{ v.model }} · {{ v.manufactureYear }} ·
+              {{ v.transmission }}</small
+            >
+          </td>
+          <td>{{ branchName(v.branchId) }}</td>
+          <td>{{ v.categories.join(', ') }}</td>
+          <td>
+            @for (a of v.teacherAssignments; track a.teacherId) {
+              <div>{{ teacherLabel(a.teacherId) }}</div>
+            } @empty {
+              <span class="muted">None</span>
+            }
+          </td>
+          <td>
+            <app-status [value]="v.status" />
+            @if (operations()[v.vehicleId]; as op) {
+              <br /><small class="muted">Change: {{ op.status }}</small>
+            }
+          </td>
+          <td class="table-actions">
+            <p-button label="Edit" size="small" severity="secondary" (onClick)="openEdit(v)" />
+            <p-button label="Teachers" size="small" [text]="true" (onClick)="openAssign(v)" />
+            <p-button
+              [label]="v.status === 'Active' ? 'Deactivate' : 'Activate'"
+              size="small"
+              [text]="true"
+              [disabled]="m.busy()"
+              (onClick)="stateTarget.set(v)"
+            />
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="6">No vehicles yet.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+</section>
+
+<p-dialog
+  [header]="editTarget() === 'new' ? 'Add vehicle' : 'Edit vehicle'"
+  [visible]="!!editTarget()"
+  (visibleChange)="!$event && editTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="form" (ngSubmit)="save()">
+    <div class="field">
+      <label for="vehicle-branch">Branch</label
+      ><select id="vehicle-branch" class="native-select" formControlName="branchId">
+        <option value="">Select a branch</option>
+        @for (b of data.value().branches; track b.branchId) {
+          <option [value]="b.branchId">{{ b.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="vehicle-number">Registration number</label
+        ><input pInputText id="vehicle-number" formControlName="registrationNumber" />
+      </div>
+      <div class="field">
+        <label for="vehicle-country">Country</label
+        ><input
+          pInputText
+          id="vehicle-country"
+          formControlName="registrationCountryCode"
+          maxlength="2"
+        />
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="vehicle-make">Manufacturer</label
+        ><input pInputText id="vehicle-make" formControlName="manufacturer" />
+      </div>
+      <div class="field">
+        <label for="vehicle-model">Model</label
+        ><input pInputText id="vehicle-model" formControlName="model" />
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="vehicle-year">Year</label
+        ><input pInputText id="vehicle-year" type="number" formControlName="manufactureYear" />
+      </div>
+      <div class="field">
+        <label for="vehicle-transmission">Transmission</label
+        ><select id="vehicle-transmission" class="native-select" formControlName="transmission">
+          <option value="Manual">Manual</option>
+          <option value="Automatic">Automatic</option>
+        </select>
+      </div>
+    </div>
+    <fieldset class="field">
+      <legend>Licence categories</legend>
+      <div class="flex gap-3 flex-wrap">
+        @for (c of categories; track c) {
+          <label class="approval-check"
+            ><input
+              type="checkbox"
+              [checked]="form.controls.categories.value.includes(c)"
+              (change)="toggleCategory(c)"
+            />
+            {{ c }}</label
+          >
+        }
+      </div>
+    </fieldset>
+    @if (form.touched && form.invalid) {
+      <p class="field-error">Complete all fields. Country is a two-letter code.</p>
+    }
+    <p-button type="submit" label="Save vehicle" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="Teachers allowed to use this vehicle"
+  [visible]="!!assignTarget()"
+  (visibleChange)="!$event && assignTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  @for (t of data.value().teachers; track t.teacherId) {
+    <label class="approval-check"
+      ><input
+        type="checkbox"
+        [checked]="teacherIds().includes(t.teacherId)"
+        (change)="toggleTeacher(t.teacherId)"
+      />
+      {{ teacherLabel(t.teacherId) }}</label
+    >
+  } @empty {
+    <p class="muted">No teachers in this school yet.</p>
+  }
+  <p-button label="Save assignments" [loading]="m.busy()" (onClick)="saveTeachers()" />
+</p-dialog>
+
+<p-dialog
+  [header]="stateTarget()?.status === 'Active' ? 'Deactivate vehicle' : 'Activate vehicle'"
+  [visible]="!!stateTarget()"
+  (visibleChange)="!$event && stateTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="stateForm" (ngSubmit)="changeState()">
+    <p class="muted">
+      Deactivation first blocks the vehicle in Scheduling. It is rejected if future lessons depend
+      on it.
+    </p>
+    <div class="field">
+      <label for="state-reason">Reason</label
+      ><textarea pInputText id="state-reason" rows="3" formControlName="reason"></textarea>
+    </div>
+    <p-button type="submit" label="Confirm" [loading]="m.busy()" />
+  </form>
+</p-dialog>

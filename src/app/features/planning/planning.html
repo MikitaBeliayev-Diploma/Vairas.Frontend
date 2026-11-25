@@ -1,0 +1,286 @@
+<app-page-header
+  eyebrow="ADMINISTRATOR WORKSPACE"
+  heading="Schedule planning"
+  description="Prepare the inputs. Review the proposal. Confirm only when you are ready."
+/>
+<section class="panel form-panel" aria-label="Scheduling requests">
+  <div class="panel-header">
+    <h2>Scheduling requests</h2>
+    <p-button label="New draft" [disabled]="hasUnresolvedOperation()" (onClick)="reset()" />
+  </div>
+  @if (listLoading()) {
+    <p role="status">Loading requests…</p>
+  }
+  @if (listFailed()) {
+    <p role="alert">Could not load scheduling requests.</p>
+    <p-button label="Retry requests" (onClick)="loadRequests()" />
+  }
+  @for (item of requests(); track item.request.requestId) {
+    <article class="record-row">
+      <div>
+        <strong
+          >{{ item.inputs.planningStart ?? 'Incomplete period' }} –
+          {{ item.inputs.planningEnd ?? '' }}</strong
+        >
+        <p>
+          Created {{ item.createdAt | schoolDate }} · modified {{ item.modifiedAt | schoolDate }} ·
+          version {{ item.request.revision }}
+        </p>
+        <p>
+          {{ item.inputs.enrollmentIds?.length ?? 0 }} enrollments ·
+          {{ item.inputs.groupIds?.length ?? 0 }} groups ·
+          {{ item.inputs.teacherIds?.length ?? 0 }} instructors ·
+          {{ item.inputs.vehicleIds?.length ?? 0 }} vehicles
+        </p>
+      </div>
+      <app-status [value]="item.request.status" />
+      <p-button
+        label="Open request"
+        [disabled]="hasUnresolvedOperation() || (busy() && !restoring())"
+        (onClick)="openRequest(item.request.requestId)"
+      />
+      @if (item.hasProposal) {
+        <p-button
+          label="Review proposal"
+          [disabled]="hasUnresolvedOperation() || (busy() && !restoring())"
+          (onClick)="openRequest(item.request.requestId, item.request.revision)"
+        />
+      }
+    </article>
+  } @empty {
+    @if (!listLoading() && !listFailed()) {
+      <p>No scheduling requests found.</p>
+    }
+  }
+  @if (nextOffset() !== null) {
+    <p-button
+      label="Next requests"
+      [disabled]="listLoading()"
+      (onClick)="loadRequests(nextOffset() ?? 0)"
+    />
+  }
+  <p-button label="First page" [disabled]="listLoading()" (onClick)="loadRequests()" />
+  @if (restoreError()) {
+    <p role="alert">{{ restoreError() }}</p>
+  }
+  @if (request() && request()?.status !== 'Draft') {
+    <p>Submitted inputs are immutable.</p>
+    <p-button
+      label="Copy inputs to new draft"
+      [disabled]="busy() || hasUnresolvedOperation()"
+      (onClick)="copyToNewDraft()"
+    />
+    @if (request()?.status !== 'Confirmed') {
+      <p-button
+        label="Create editable revision"
+        [disabled]="busy() || hasUnresolvedOperation()"
+        (onClick)="createVersion()"
+      />
+    }
+  }
+</section>
+<ol class="steps">
+  <li [class.current]="!request() || request()?.status === 'Draft'">
+    <span>1</span> Prepare draft
+  </li>
+  <li [class.current]="request()?.status === 'Submitted' && !proposal()">
+    <span>2</span> Submit & generate
+  </li>
+  <li [class.current]="proposal() && !operation()"><span>3</span> Review proposal</li>
+  <li [class.current]="operation()"><span>4</span> Confirm result</li>
+</ol>
+@if (planningInputs(); as inputs) {
+  @if (!inputs.complete) {
+    <section class="panel form-panel" aria-label="Missing planning inputs">
+      <app-status value="Incomplete" />
+      <h2>Preliminary planning checks</h2>
+      <p class="muted">School-owned gaps are shown below. Submission checks the selected draft period against current Scheduling and Learning requirements.</p>
+      <ul class="requirement-list">
+        @for (item of inputs.missingItems; track item) {
+          <li>{{ item }}</li>
+        }
+      </ul>
+      @for (enrollment of inputs.enrollments ?? []; track enrollment.enrollmentId) {
+        @if (enrollment.missingItems.length) {
+          <h3>{{ learnerName(enrollment.enrollmentId) }}</h3>
+          <ul class="requirement-list">
+            @for (item of enrollment.missingItems; track item) { <li>{{ item }}</li> }
+          </ul>
+        }
+      }
+      <a routerLink="/admin/enrollments" class="text-link">Open enrollments</a>
+    </section>
+  }
+}
+@if (auth.catalog(); as catalog) {
+  @if (!request() || request()?.status === 'Draft') {
+    <section class="panel form-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Draft Input Set</h2>
+          <p class="muted">Use the selected school’s enrollments and resources.</p>
+        </div>
+        @if (request()) {
+          <app-status value="Draft" />
+        }
+      </div>
+      <app-planning-form
+        [catalog]="catalog"
+        [initialInputs]="restoredInputs()"
+        [resetVersion]="formResetVersion()"
+        [schoolId]="auth.session()!.schoolId"
+        [busy]="busy()"
+        (saved)="save($event)"
+      />
+      @if (request()) {
+        <ul class="requirement-list">
+          @for (item of request()!.missingItems; track item) {
+            <li>Missing input: {{ item }}</li>
+          }
+        </ul>
+        <div class="action-bar">
+          <p>Saved revision {{ request()!.revision }} · submission freezes these inputs.</p>
+          <p-button
+            label="Submit scheduling request"
+            [disabled]="!!request()!.missingItems.length"
+            [loading]="busy()"
+            (onClick)="submit()"
+          />
+        </div>
+      }
+    </section>
+  } @else if (!proposal() && request()?.status !== 'Confirmed') {
+    <section class="panel form-panel">
+      <app-status [value]="request()!.status" />
+      <h2>Your request is ready for generation.</h2>
+      <p>
+        Revision {{ request()!.revision }} is immutable. Generating a proposal does not reserve
+        lessons.
+      </p>
+      <p-button label="Generate proposal" [loading]="busy()" (onClick)="generate()" />
+      @if (generating()) {
+        <p class="typing-state" role="status">
+          Generating the proposal. This can take up to 30 seconds.
+        </p>
+      }
+    </section>
+  }
+  @if (proposal(); as proposal) {
+    <section class="panel form-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Schedule proposal</h2>
+          <p class="muted">Review the exact resources and times before confirmation.</p>
+        </div>
+        <app-status [value]="stale() ? 'Stale' : proposal.status" />
+      </div>
+      @for (issue of proposal.issues; track issue) {
+        <p class="feedback error">{{ issue }}</p>
+      }
+      @for (lesson of proposal.theoryLessons; track lesson.startsAt + lesson.groupId) {
+        <article class="proposal-card">
+          <span class="eyebrow"
+            >THEORY LESSON —
+            {{ request()?.status === 'Confirmed' ? 'CONFIRMED' : 'PROPOSED' }}</span
+          >
+          <h3>{{ lesson.startsAt | schoolDate }} – {{ lesson.endsAt | schoolDate: 'time' }}</h3>
+          <dl class="details-grid">
+            <div>
+              <dt>Training group</dt>
+              <dd>{{ lesson.groupId }}</dd>
+            </div>
+            <div>
+              <dt>Instructor</dt>
+              <dd>{{ teacherName(lesson.teacherId) }}</dd>
+            </div>
+            <div>
+              <dt>Branch</dt>
+              <dd>{{ lesson.branchId }}</dd>
+            </div>
+            <div>
+              <dt>Category</dt>
+              <dd>{{ lesson.category }}</dd>
+            </div>
+          </dl>
+        </article>
+      }
+      @if (!proposal.lessons.length && !proposal.theoryLessons.length) {
+        <p class="muted">
+          No lesson placements were returned. Review the proposal status and any reported issues.
+        </p>
+      }
+      @for (lesson of proposal.lessons; track lesson.startsAt + lesson.enrollmentId) {
+        <div class="proposal-card">
+          <span class="eyebrow">PRACTICAL LESSON</span>
+          <h3>{{ lesson.startsAt | schoolDate }} – {{ lesson.endsAt | schoolDate: 'time' }}</h3>
+          <dl class="details-grid">
+            <div>
+              <dt>Learner</dt>
+              <dd>{{ learnerName(lesson.enrollmentId) }}</dd>
+            </div>
+            <div>
+              <dt>Category</dt>
+              <dd>{{ lesson.category }}</dd>
+            </div>
+            <div>
+              <dt>Instructor</dt>
+              <dd>{{ teacherName(lesson.teacherId) }}</dd>
+            </div>
+            <div>
+              <dt>Vehicle</dt>
+              <dd>{{ vehicleName(lesson.vehicleId) }}</dd>
+            </div>
+          </dl>
+        </div>
+      }
+      @if (operation(); as operation) {
+        <div class="action-bar">
+          <div>
+            <app-status [value]="operation.status" />
+            <p>
+              {{
+                operation.status === 'Committed'
+                  ? 'Lessons were committed successfully.'
+                  : 'The outcome is not confirmed. Keep this operation identity and reconcile it.'
+              }}
+            </p>
+          </div>
+          @if (operation.status === 'Committed') {
+            <a routerLink="/schedule" class="button-link">View confirmed schedule</a>
+          } @else if (hasUnresolvedOperation()) {
+            <p-button label="Check operation status" [loading]="busy()" (onClick)="reconcile()" />
+          }
+        </div>
+      } @else {
+        <div class="action-bar">
+          <p>Availability and the current revision are rechecked at commit.</p>
+          <p-button
+            label="Confirm schedule"
+            [disabled]="proposal.status !== 'Ready' || stale() || request()?.status === 'Confirmed'"
+            [loading]="busy()"
+            (onClick)="confirm()"
+          />
+        </div>
+      }
+      @if (
+        !operation() || operation()?.status === 'Committed' || operation()?.status === 'Rejected'
+      ) {
+        <p-button
+          label="Start a new draft"
+          severity="secondary"
+          [text]="true"
+          [disabled]="busy()"
+          (onClick)="reset()"
+        />
+      }
+    </section>
+  }
+} @else {
+  <section class="panel empty-state">
+    <h2>Planning catalog unavailable</h2>
+    <p>
+      The live contracts do not yet provide the resource catalogs required by this form. Configure
+      those read models before enabling live planning.
+    </p>
+  </section>
+}

@@ -1,0 +1,206 @@
+<app-page-header
+  eyebrow="ADMINISTRATION"
+  [heading]="data.value().school?.name ?? 'School setup'"
+  description="Branches are where lessons take place. Groups bundle learners for theory and planning."
+>
+  <p-button
+    label="Rename school"
+    severity="secondary"
+    [disabled]="!data.value().school"
+    (onClick)="openRename()"
+  />
+</app-page-header>
+<app-async-state [loading]="data.loading()" [error]="data.failed()" (retry)="data.load()" />
+@if (!data.loading() && !data.failed()) {
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Branches</h2>
+        <p class="muted">Inactive branches cannot receive new lessons.</p>
+      </div>
+      <p-button label="Add branch" (onClick)="openBranch('new')" />
+    </div>
+    <div class="record-list">
+      @for (b of data.value().branches; track b.branchId) {
+        <div class="record-row">
+          <div>
+            <strong>{{ b.name }}</strong
+            ><small>{{ address(b) }}</small>
+          </div>
+          <app-status [value]="b.status" />
+          <div class="table-actions">
+            <p-button label="Edit" size="small" severity="secondary" (onClick)="openBranch(b)" />
+            <p-button
+              [label]="b.status === 'Active' ? 'Deactivate' : 'Activate'"
+              size="small"
+              [text]="true"
+              [disabled]="m.busy()"
+              (onClick)="toggleBranch(b)"
+            />
+          </div>
+        </div>
+      } @empty {
+        <app-async-state
+          [empty]="true"
+          title="No branches"
+          description="Add the first branch to schedule lessons."
+        />
+      }
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Groups</h2>
+        <p class="muted">Groups link enrollments to a programme version and theory teachers.</p>
+      </div>
+      <p-button label="Add group" (onClick)="openGroup('new')" />
+    </div>
+    <div class="record-list">
+      @for (g of data.value().groups; track g.groupId) {
+        <div class="record-row">
+          <div>
+            <strong>{{ g.name }}</strong
+            ><small
+              >{{ branchName(g.branchId) }} · Category {{ g.categoryCode ?? 'any' }} · revision
+              {{ g.revision }}</small
+            >
+          </div>
+          <app-status [value]="g.endedAt ? 'Inactive' : 'Active'" />
+          <div class="table-actions">
+            <p-button label="Rename" size="small" severity="secondary" (onClick)="openGroup(g)" />
+            <p-button
+              label="Assign teacher"
+              size="small"
+              [text]="true"
+              [disabled]="!data.value().teachers.length"
+              (onClick)="openTeacher(g)"
+            />
+          </div>
+        </div>
+      } @empty {
+        <app-async-state
+          [empty]="true"
+          title="No groups"
+          description="Create a group for learners."
+        />
+      }
+    </div>
+  </section>
+}
+
+<p-dialog
+  header="Rename school"
+  [visible]="renameOpen()"
+  (visibleChange)="renameOpen.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="schoolForm" (ngSubmit)="rename()">
+    <div class="field">
+      <label for="school-name">School name</label
+      ><input pInputText id="school-name" formControlName="name" />
+    </div>
+    <p-button type="submit" label="Save" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  [header]="branchTarget() === 'new' ? 'Add branch' : 'Edit branch'"
+  [visible]="!!branchTarget()"
+  (visibleChange)="!$event && branchTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="branchForm" (ngSubmit)="saveBranch()">
+    <div class="field">
+      <label for="branch-name">Name</label
+      ><input pInputText id="branch-name" formControlName="name" />
+    </div>
+    <div class="field">
+      <label for="branch-address">Address</label
+      ><input
+        pInputText
+        id="branch-address"
+        formControlName="addressLine"
+        autocomplete="street-address"
+      />
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="branch-city">City</label
+        ><input pInputText id="branch-city" formControlName="city" />
+      </div>
+      <div class="field">
+        <label for="branch-postal">Postal code</label
+        ><input pInputText id="branch-postal" formControlName="postalCode" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="branch-country">Country code</label
+      ><input pInputText id="branch-country" formControlName="countryCode" maxlength="2" />
+    </div>
+    @if (branchForm.touched && branchForm.invalid) {
+      <p class="field-error">Enter a name and a two-letter country code.</p>
+    }
+    <p-button type="submit" label="Save branch" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  [header]="groupTarget() === 'new' ? 'Add group' : 'Rename group'"
+  [visible]="!!groupTarget()"
+  (visibleChange)="!$event && groupTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="groupForm" (ngSubmit)="saveGroup()">
+    <div class="field">
+      <label for="group-name">Name</label
+      ><input pInputText id="group-name" formControlName="name" />
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="group-branch">Branch</label
+        ><select id="group-branch" class="native-select" formControlName="branchId">
+          <option value="">No branch</option>
+          @for (b of activeBranches(); track b.branchId) {
+            <option [value]="b.branchId">{{ b.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="group-category">Category</label
+        ><select id="group-category" class="native-select" formControlName="categoryCode">
+          <option value="">Any</option>
+          @for (c of categories; track c) {
+            <option [value]="c">{{ c }}</option>
+          }
+        </select>
+      </div>
+    </div>
+    <p-button type="submit" label="Save group" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="Assign group teacher"
+  [visible]="!!teacherTarget()"
+  (visibleChange)="!$event && teacherTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+>
+  <form [formGroup]="teacherForm" (ngSubmit)="assignTeacher()">
+    <div class="field">
+      <label for="group-teacher">Teacher</label
+      ><select id="group-teacher" class="native-select" formControlName="teacherId">
+        @for (t of data.value().teachers; track t.teacherId) {
+          <option [value]="t.teacherId">{{ teacherLabel(t) }}</option>
+        }
+      </select>
+    </div>
+    <p-button type="submit" label="Assign" [loading]="m.busy()" />
+  </form>
+</p-dialog>

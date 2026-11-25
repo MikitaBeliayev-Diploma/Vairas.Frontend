@@ -1,0 +1,99 @@
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="form-grid">
+    <div class="field">
+      <label for="theory-minutes">Teaching minutes</label
+      ><input
+        pInputText
+        id="theory-minutes"
+        type="number"
+        min="1"
+        step="1"
+        [max]="physicalMinutes()"
+        formControlName="trainingMinutes"
+      />
+      <small class="muted">Actual interval: {{ physicalMinutes() }} min.</small>
+    </div>
+    <div class="field">
+      <label for="theory-explanation">Duration explanation</label
+      ><textarea
+        pInputText
+        id="theory-explanation"
+        rows="2"
+        formControlName="durationExplanation"
+        placeholder="Required when fewer minutes than the interval were taught"
+      ></textarea>
+    </div>
+  </div>
+  <div class="panel-header">
+    <div>
+      <h3>Group roster</h3>
+      <p class="muted">
+        Present earns the full teaching minutes, Absent earns zero.
+        {{ presentCount() }} of {{ roster().length }} marked present.
+      </p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <p-button
+        label="Mark all present"
+        severity="secondary"
+        size="small"
+        [disabled]="busy() || !roster().length"
+        (onClick)="markAll('Present')"
+      />
+    </div>
+  </div>
+  <table class="theory-roster" aria-label="Theory attendance">
+    <thead>
+      <tr>
+        <th scope="col">Learner</th>
+        <th scope="col">Attendance</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (entry of roster(); track entry.enrollmentId; let i = $index) {
+        <tr>
+          <td>
+            <strong>{{ entry.name }}</strong
+            ><small class="muted"> · enrollment {{ entry.enrollmentId.slice(0, 8) }}</small>
+          </td>
+          <td>
+            <fieldset class="flex gap-3 flex-wrap">
+              <legend class="sr-only">Attendance of {{ entry.name }}</legend>
+              <label
+                ><input
+                  type="radio"
+                  [name]="'attendance-' + i"
+                  value="Present"
+                  [formControl]="form.controls.attendance.at(i)"
+                />
+                Present</label
+              >
+              <label
+                ><input
+                  type="radio"
+                  [name]="'attendance-' + i"
+                  value="Absent"
+                  [formControl]="form.controls.attendance.at(i)"
+                />
+                Absent</label
+              >
+            </fieldset>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="2">No learners are on this group roster.</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  @if (error()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+  <p-button
+    type="submit"
+    [label]="submitLabel()"
+    [loading]="busy()"
+    [disabled]="!roster().length"
+  />
+</form>

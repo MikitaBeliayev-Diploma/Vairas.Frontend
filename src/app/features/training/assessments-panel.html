@@ -1,0 +1,282 @@
+@if (isAdmin()) {
+  <section class="panel form-panel" aria-labelledby="assessment-booking-heading">
+    <p class="eyebrow">SCHEDULING · US-010</p>
+    <h2 id="assessment-booking-heading">Assessment appointment</h2>
+    <p class="muted">
+      Book a repeated or additional assessment for this enrollment. Scheduling re-checks the
+      approved readiness with Learning Tracking; booking does not change readiness or results.
+    </p>
+    @if (approved(); as readiness) {
+      <p class="muted">
+        Approved readiness evaluation {{ readiness.evaluationId.slice(0, 8) }} ·
+        {{ approvedDefinition()?.name ?? 'final assessment' }}
+        {{ approvedDefinition()?.trainingKind ? '· ' + approvedDefinition()!.trainingKind : '' }}
+      </p>
+      @if (pending(); as op) {
+        <div class="feedback" role="status">
+          <p>
+            The booking outcome is not known yet (operation {{ op.operationId.slice(0, 8) }},
+            {{ op.status }}). A new booking is blocked until it is reconciled.
+          </p>
+          <p-button
+            label="Check outcome"
+            severity="secondary"
+            [loading]="busy()"
+            (onClick)="reconcile()"
+          />
+        </div>
+      }
+      <app-assessment-appointment-form
+        [teachers]="auth.catalog()?.teachers ?? []"
+        [branches]="auth.catalog()?.branches ?? []"
+        [vehicles]="auth.catalog()?.vehicles ?? []"
+        [defaultBranchId]="auth.catalog()?.branchId ?? ''"
+        [vehicleRequired]="vehicleRequired()"
+        [busy]="busy()"
+        [locked]="!!pending()"
+        (submitted)="book($event)"
+      />
+    } @else {
+      <p class="feedback" role="note">
+        An assessment can be booked only for a current, approved readiness evaluation. Evaluate
+        prerequisites and let an assessor approve readiness first.
+      </p>
+    }
+    @if (bookingError()) {
+      <p class="feedback error" role="alert">{{ bookingError() }}</p>
+    }
+    @if (created(); as appointment) {
+      <div class="record-row" role="status">
+        <div>
+          <strong>Booked appointment {{ appointment.appointmentId.slice(0, 8) }}</strong
+          ><small
+            >{{ appointment.startsAt | schoolDate }} –
+            {{ appointment.endsAt | schoolDate: 'time' }} · revision
+            {{ appointment.version }}</small
+          >
+        </div>
+        <app-status [value]="appointment.status" />
+      </div>
+    }
+  </section>
+}
+@if (isAdmin() || isAssessor()) {
+  <section class="panel form-panel" aria-labelledby="assessment-list-heading">
+    <p class="eyebrow">ASSESSMENTS</p>
+    <h2 id="assessment-list-heading">Assessment appointments</h2>
+    <p class="muted">Appointments are retrieved from Scheduling for this enrollment.</p>
+    @if (appointmentsFailed()) {
+      <p role="alert">Appointment history could not be loaded.</p>
+      <p-button label="Retry appointments" (onClick)="load()" />
+    }
+    <div class="record-list">
+      @for (a of appointments(); track a.appointmentId) {
+        <div class="record-row">
+          <div>
+            <strong>{{ definitionName(a.assessmentDefinitionVersionId) }}</strong
+            ><small
+              >{{ a.startsAt | schoolDate }} – {{ a.endsAt | schoolDate: 'time' }} · ID
+              {{ a.appointmentId }}</small
+            >
+          </div>
+          <app-status [value]="a.status ?? 'Scheduled'" />
+          @if (isAdmin() && (a.status ?? 'Scheduled') === 'Scheduled') {
+            <p-button
+              label="Cancel"
+              severity="secondary"
+              size="small"
+              [disabled]="busy()"
+              (onClick)="startCancel(a)"
+            />
+          }
+        </div>
+      } @empty {
+        <p class="muted">
+          {{
+            isAdmin()
+              ? 'No assessment appointments were returned for this enrollment.'
+              : 'Appointment history is restricted to administrators by the current API.'
+          }}
+        </p>
+      }
+    </div>
+    @if (cancelling(); as a) {
+      <div class="field">
+        <label for="appointment-cancel-reason"
+          >Cancellation reason · {{ a.startsAt | schoolDate }}</label
+        ><textarea
+          pInputText
+          id="appointment-cancel-reason"
+          rows="2"
+          [formControl]="cancelReason"
+        ></textarea>
+        @if (cancelReason.touched && cancelReason.invalid) {
+          <small class="field-error">Enter a reason of up to 500 characters.</small>
+        }
+      </div>
+      <div class="flex gap-3 flex-wrap">
+        <p-button label="Cancel appointment" [loading]="busy()" (onClick)="cancel()" />
+        <p-button label="Keep it" severity="secondary" (onClick)="cancelling.set(null)" />
+      </div>
+    }
+  </section>
+  <section class="panel form-panel" aria-labelledby="assessment-results-heading">
+    <p class="eyebrow">LEARNING TRACKING · US-016 / US-024</p>
+    <h2 id="assessment-results-heading">Assessment results</h2>
+    <p class="muted">
+      Results are separate from readiness approval. Each required assessment needs a recorded,
+      passed result before the internal completion report can be ready.
+      @if (isAdmin()) {
+        <a routerLink="/documents" class="text-link">Open documents</a>
+      }
+    </p>
+    @if (resultsFailed()) {
+      <p class="feedback" role="note">Assessment results are not available to you right now.</p>
+    }
+    @if (appointmentsFailed()) {
+      <p role="alert">Appointment history could not be loaded.</p>
+      <p-button label="Retry appointments" (onClick)="load()" />
+    }
+    <div class="record-list">
+      @for (r of results(); track r.assessmentId) {
+        <div class="record-row">
+          <div>
+            <strong
+              >{{ definitionName(r.assessmentDefinitionVersionId) }} · attempt
+              {{ r.attemptNumber }}</strong
+            ><small
+              >{{ r.assessedAt | schoolDate }} · mark {{ r.mark }} · result version
+              {{ r.version }}</small
+            >
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <app-status [value]="r.outcome" />
+            <app-status [value]="r.status" />
+            <p-button
+              label="Result history"
+              size="small"
+              severity="secondary"
+              [disabled]="busy()"
+              (onClick)="openHistory(r)"
+            />
+          </div>
+        </div>
+      } @empty {
+        @if (!resultsFailed()) {
+          <p class="muted">No assessment results are recorded for this enrollment.</p>
+        }
+      }
+    </div>
+    @if (selectedResult(); as selected) {
+      <section class="form-panel" aria-label="Assessment result history">
+        <h3>
+          {{ definitionName(selected.assessmentDefinitionVersionId) }} · attempt
+          {{ selected.attemptNumber }} — history
+        </h3>
+        <p-button
+          label="Close history"
+          severity="secondary"
+          [disabled]="busy()"
+          (onClick)="closeHistory()"
+        />
+        @if (historyLoading()) {
+          <p role="status">Loading result history…</p>
+        }
+        @if (historyFailed()) {
+          <p role="alert">Result history could not be loaded.</p>
+          <p-button label="Retry history" (onClick)="openHistory(selected)" />
+        }
+        @for (version of history(); track version.resultVersionId) {
+          <article class="record-row">
+            <div>
+              <strong
+                >Version {{ version.version }} · mark {{ version.mark }}
+                {{ version.current ? '· Current' : '' }}</strong
+              ><small
+                >{{ version.recordedAt | schoolDate }} ·
+                {{ version.correctionReason ?? 'Original result' }}</small
+              >
+            </div>
+            <app-status [value]="version.currentValidity" />
+          </article>
+        }
+        @if (canCorrectResult()) {
+          @if (reviewing()) {
+            <h3>Review held result</h3>
+            <p role="note">
+              The readiness approval behind this result was invalidated at
+              {{ selected.readinessInvalidatedAt | schoolDate }}. Confirm the original mark or annul
+              the attempt; Learning Tracking decides whether the result can stand.
+            </p>
+          } @else {
+            <h3>Correct recorded result</h3>
+          }
+          <p>The previous version remains in history. The server determines the result outcome.</p>
+          <div class="field">
+            <label for="result-correction-status">Correction type</label
+            ><select
+              id="result-correction-status"
+              class="native-select"
+              [formControl]="correctionStatus"
+            >
+              <option value="Recorded">Correct mark</option>
+              <option value="Annulled">Annul attempt (retain original mark)</option>
+            </select>
+          </div>
+          @if (correctionStatus.value === 'Recorded') {
+            <div class="field">
+              <label for="result-correction-mark">Corrected mark</label
+              ><input
+                pInputText
+                id="result-correction-mark"
+                type="number"
+                step="1"
+                [formControl]="correctionMark"
+              />
+            </div>
+          }
+          <div class="field">
+            <label for="result-correction-reason">Correction reason</label
+            ><textarea
+              pInputText
+              id="result-correction-reason"
+              [formControl]="correctionReason"
+              rows="2"
+            ></textarea>
+          </div>
+          <p-button label="Save result correction" [loading]="busy()" (onClick)="correctResult()" />
+        } @else if (selected.status === 'ReviewRequired') {
+          <p role="note">
+            This result is held for review. An authorized assessor can review it once Learning
+            Tracking reports the readiness invalidation time.
+          </p>
+        }
+      </section>
+    }
+    @if (results().length && results().some((r) => r.status === 'ReviewRequired')) {
+      <p class="feedback" role="note">
+        A result is held for review after a historical change; it blocks the completion report until
+        an authorized correction resolves it.
+      </p>
+    }
+    @if (isAssessor()) {
+      <h3>Record a performed assessment</h3>
+      @if (definitions().length) {
+        <app-assessment-result-form
+          [definitions]="definitions()"
+          [appointments]="appointments()"
+          [busy]="busy()"
+          (submitted)="record($event)"
+        />
+      } @else {
+        <p class="muted">
+          No assessment of this programme is visible to you yet. An administrator can run the
+          readiness evaluation first.
+        </p>
+      }
+      @if (resultError()) {
+        <p class="feedback error" role="alert">{{ resultError() }}</p>
+      }
+    }
+  </section>
+}

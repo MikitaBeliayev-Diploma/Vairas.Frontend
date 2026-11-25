@@ -1,0 +1,83 @@
+<app-page-header
+  eyebrow="LEARNING TRACKING"
+  [heading]="record()?.lessonTitle ?? 'Practical record'"
+  description="Review the exact facts and participant confirmations."
+>
+  @if (record()) {
+    <a [routerLink]="['/training', record()!.enrollmentId]" class="button-link secondary"
+      >Back to training</a
+    >
+  }</app-page-header
+><app-async-state [loading]="loading()" [error]="failed()" (retry)="load()" />
+@if (record(); as record) {
+  <p class="section-note">
+    Lesson date: {{ record.occurredAt | schoolDate }} · Record revision {{ record.revision }}
+  </p>
+  <app-record-review
+    [record]="record"
+    [topics]="auth.catalog()?.topics ?? []"
+    [role]="auth.session()!.role"
+    [busy]="busy()"
+    (confirmed)="confirm()"
+    (disputed)="dispute($event)"
+  />
+  @if (auth.has('Instructor')) {
+    <section class="panel form-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Correct the facts</h2>
+          <p class="muted">
+            A correction preserves history and invalidates the earlier confirmations.
+          </p>
+        </div>
+        <p-button
+          label="Create corrected version"
+          severity="secondary"
+          [disabled]="busy()"
+          (onClick)="edit()"
+        />
+      </div>
+      @if (editing()) {
+        <form [formGroup]="form" (ngSubmit)="revise()">
+          <div class="form-grid">
+            <div class="field">
+              <label for="correct-minutes">Teaching minutes</label
+              ><input
+                pInputText
+                id="correct-minutes"
+                type="number"
+                min="1"
+                step="1"
+                formControlName="trainingMinutes"
+              />
+            </div>
+            <div class="field">
+              <label for="correct-distance">Distance · km</label
+              ><input
+                pInputText
+                id="correct-distance"
+                type="number"
+                min="0"
+                step="0.1"
+                formControlName="distanceKm"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label for="correct-reason">Correction reason</label
+            ><textarea pInputText id="correct-reason" rows="3" formControlName="reason"></textarea>
+          </div>
+          @if (form.touched && form.invalid) {
+            <p class="field-error">
+              Enter valid teaching minutes, distance and a correction reason.
+            </p>
+          }
+          <p-button type="submit" label="Save corrected facts" [loading]="busy()" />
+        </form>
+      }
+    </section>
+  }
+}
+@if (error()) {
+  <p class="feedback error" role="alert">{{ error() }}</p>
+}

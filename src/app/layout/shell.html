@@ -1,0 +1,141 @@
+﻿<a href="#main-content" class="skip-link" (click)="focusMain($event)">Skip to content</a>
+<div class="workspace" [class.menu-open]="menu()">
+  @if (menu()) {
+    <button class="menu-scrim" aria-label="Close navigation" (click)="menu.set(false)"></button>
+  }
+  <aside class="sidebar" aria-label="Main navigation">
+    <a routerLink="/dashboard" class="brand" (click)="menu.set(false)"
+      ><span class="brand-mark"><app-icon name="car" /></span
+      ><span
+        >vairas<span class="brand-period">.</span><small>DRIVING SCHOOL PLATFORM</small></span
+      ></a
+    >
+    <div class="school-panel">
+      <span class="school-icon"><app-icon name="school" /></span>
+      <div>
+        <span class="sidebar-caption">CURRENT SCHOOL</span
+        ><label class="sr-only" for="school-context">School</label
+        ><select
+          id="school-context"
+          [value]="auth.session()?.schoolId"
+          [disabled]="auth.busy()"
+          (change)="changeSchool($event)"
+        >
+          @for (school of auth.catalog()?.schools ?? []; track school.schoolId) {
+            <option [value]="school.schoolId">{{ school.name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+    @if (auth.myEnrollments().length > 1) {
+      <div class="school-panel">
+        <span class="school-icon"><app-icon name="chart" /></span>
+        <div>
+          <span class="sidebar-caption">ENROLLMENT</span
+          ><label class="sr-only" for="enrollment-context">Enrollment</label
+          ><select
+            id="enrollment-context"
+            [value]="auth.session()?.enrollmentId"
+            (change)="selectEnrollment($event)"
+          >
+            @for (e of auth.myEnrollments(); track e.enrollmentId) {
+              <option [value]="e.enrollmentId">Category {{ e.category }} · {{ e.status }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    }
+    <p class="nav-caption">WORKSPACE</p>
+    @if (auth.onboarding()) {
+      <nav>
+        <a routerLink="/onboarding" routerLinkActive="active" (click)="menu.set(false)"
+          ><app-icon name="school" /><span>Get started</span></a
+        >
+        <a routerLink="/invitations" routerLinkActive="active" (click)="menu.set(false)"
+          ><app-icon name="users" /><span>My invitations</span></a
+        >
+      </nav>
+    } @else {
+      <nav>
+        @for (link of links; track link.path) {
+          @if (link.roles.includes(auth.role() ?? '')) {
+            <a [routerLink]="link.path" routerLinkActive="active" (click)="menu.set(false)"
+              ><app-icon [name]="link.icon" /><span>{{ link.label }}</span>
+              @if (link.path === '/assistant') {
+                <span class="nav-pill" aria-hidden="true">AI</span>
+              }
+            </a>
+          }
+        }
+        <a routerLink="/invitations" routerLinkActive="active" (click)="menu.set(false)"
+          ><app-icon name="users" /><span>My invitations</span></a
+        >
+      </nav>
+      @if (auth.has('Administrator')) {
+        <p class="nav-caption">ADMINISTRATION</p>
+        <nav aria-label="Administration">
+          @for (link of adminLinks; track link.path) {
+            @if (!link.permission || auth.can(link.permission)) {
+              <a [routerLink]="link.path" routerLinkActive="active" (click)="menu.set(false)"
+                ><app-icon [name]="link.icon" /><span>{{ link.label }}</span></a
+              >
+            }
+          }
+        </nav>
+      }
+    }
+    <div class="sidebar-bottom">
+      <a routerLink="/profile" class="profile-link" (click)="menu.set(false)"
+        ><span class="avatar">{{ auth.session()?.name?.charAt(0) || '?' }}</span
+        ><span
+          ><strong>{{ auth.session()?.name || 'New account' }}</strong
+          ><small>{{ auth.role() }}</small></span
+        ><app-icon name="profile" /></a
+      ><button class="signout" (click)="auth.logout()"><app-icon name="logout" />Sign out</button>
+    </div>
+  </aside>
+  <div class="main-column">
+    <header class="topbar">
+      <div class="flex items-center gap-3">
+        <button
+          class="mobile-toggle"
+          aria-label="Open navigation"
+          [attr.aria-expanded]="menu()"
+          (click)="menu.update((v) => !v)"
+        >
+          <app-icon name="menu" /></button
+        ><span class="breadcrumb"
+          >Workspace <span>/</span>
+          <strong>{{ (route() ?? '/dashboard').split('/')[1] }}</strong></span
+        >
+      </div>
+      <div class="topbar-meta">
+        <app-theme-toggle /> <span>Europe/Vilnius</span
+        ><span class="role-badge">{{ auth.role() }}</span>
+      </div>
+    </header>
+    <main id="main-content" tabindex="-1">
+      @if (feedback.error()) {
+        <div class="feedback error" role="alert">
+          <span>{{ feedback.error() }}</span
+          ><button aria-label="Dismiss error" (click)="feedback.error.set('')">×</button>
+        </div>
+      }
+      @if (feedback.success()) {
+        <div class="feedback success" role="status">
+          <span>{{ feedback.success() }}</span
+          ><button aria-label="Dismiss notification" (click)="feedback.success.set('')">×</button>
+        </div>
+      }
+      @if (auth.busy()) {
+        <p role="status">Updating workspace…</p>
+      } @else {
+        <router-outlet />
+      }
+    </main>
+    <footer class="app-footer">
+      <span>Vairas · A clearer road to learning.</span
+      ><span>School-local times · Europe/Vilnius</span>
+    </footer>
+  </div>
+</div>

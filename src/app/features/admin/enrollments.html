@@ -1,0 +1,234 @@
+<app-page-header
+  eyebrow="ADMINISTRATION"
+  heading="Enrollments"
+  description="Enroll learners into a licence category, assign a group and pin the programme version."
+>
+  <p-button label="New enrollment" (onClick)="createOpen.set(true)" />
+</app-page-header>
+@if (assignmentNotice()) {
+  <p role="status" class="feedback">{{ assignmentNotice() }}</p>
+}
+@if (assignmentPending()) {
+  <p-button label="Check school assignment" [loading]="m.busy()" (onClick)="checkAssignment()" />
+}
+@if (trainingNotice()) {
+  <p role="status" class="feedback">{{ trainingNotice() }}</p>
+}
+@if (data.value().planning; as planning) {
+  <section class="panel form-panel" [attr.aria-label]="'Planning inputs'">
+    <div class="flex gap-3 items-center flex-wrap">
+      <app-status [value]="planning.complete ? 'Ready' : 'Incomplete'" />
+      <strong>{{
+        planning.complete ? 'Planning inputs are complete.' : 'Planning inputs are missing'
+      }}</strong>
+    </div>
+    @if (!planning.complete) {
+      <ul class="requirement-list">
+        @for (item of planning.missingItems; track item) {
+          <li>{{ item }}</li>
+        }
+      </ul>
+    }
+  </section>
+}
+<section class="panel">
+  <div class="toolbar">
+    <label for="enrollment-search">Find an enrollment</label
+    ><input
+      pInputText
+      id="enrollment-search"
+      placeholder="Student ID, category or status"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+  <app-async-state [loading]="data.loading()" [error]="data.failed()" (retry)="data.load()" />
+  @if (!data.loading() && !data.failed()) {
+    <p-table [value]="rows()" [paginator]="rows().length > 10" [rows]="10" dataKey="enrollmentId">
+      <ng-template #header>
+        <tr>
+          <th>Learner</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Group</th>
+          <th>Programme</th>
+          <th>Started</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-e>
+        <tr>
+          <td>
+            <strong>Student {{ shortId(e.studentId) }}</strong
+            ><br /><small class="muted" [title]="e.studentId">{{ e.studentId }}</small>
+          </td>
+          <td>{{ e.licenseCategory }}</td>
+          <td><app-status [value]="e.status" /></td>
+          <td>{{ groupName(e.groupId) }}</td>
+          <td>{{ versionLabel(e.programVersionId) }}</td>
+          <td>{{ e.startedAt | schoolDate: 'date' }}</td>
+          <td class="table-actions">
+            <a class="text-link" [routerLink]="['/training', e.enrollmentId]">Training</a>
+            @if (e.status === 'Active') {
+              <p-button
+                label="Assign"
+                size="small"
+                severity="secondary"
+                [disabled]="m.busy() || !!assignmentPending()"
+                (onClick)="openAssign(e)"
+              />
+              @if (e.groupId && e.programVersionId) {
+                <p-button
+                  label="Check / configure training"
+                  size="small"
+                  severity="secondary"
+                  [disabled]="m.busy() || !!assignmentPending()"
+                  (onClick)="configureTraining(e)"
+                />
+              }
+              @if (e.groupId) {
+                <p-button
+                  label="Remove group"
+                  size="small"
+                  [text]="true"
+                  [disabled]="m.busy()"
+                  (onClick)="removeGroup(e)"
+                />
+              }
+              <p-button
+                label="End"
+                size="small"
+                [text]="true"
+                severity="danger"
+                [disabled]="m.busy()"
+                (onClick)="endTarget.set(e)"
+              />
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="7">No enrollments yet.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+</section>
+
+<p-dialog
+  header="New enrollment"
+  [visible]="createOpen()"
+  (visibleChange)="createOpen.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="createForm" (ngSubmit)="create()">
+    <p class="muted">
+      The learner shares their student ID from the Get started page after creating a student
+      profile.
+    </p>
+    <div class="field">
+      <label for="enroll-student">Student ID</label
+      ><input pInputText id="enroll-student" formControlName="studentId" placeholder="UUID" />
+      @if (createForm.controls.studentId.touched && createForm.controls.studentId.invalid) {
+        <small class="field-error">Enter the learner's student ID (UUID).</small>
+      }
+    </div>
+    <div class="field">
+      <label for="enroll-category">Licence category</label
+      ><select id="enroll-category" class="native-select" formControlName="licenseCategory">
+        @for (c of categories; track c) {
+          <option [value]="c">{{ c }}</option>
+        }
+      </select>
+    </div>
+    <p-button type="submit" label="Create enrollment" [loading]="m.busy()" />
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="Assign group and programme"
+  [visible]="!!assignTarget()"
+  (visibleChange)="!$event && assignTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="assignForm" (ngSubmit)="assign()">
+    <div class="field">
+      <label for="assign-group">Group</label
+      ><select id="assign-group" class="native-select" formControlName="groupId">
+        <option value="">Select a group</option>
+        @for (g of data.value().groups; track g.groupId) {
+          @if (!g.endedAt) {
+            <option [value]="g.groupId">
+              {{ g.name }}{{ g.categoryCode ? ' · ' + g.categoryCode : '' }}
+            </option>
+          }
+        }
+      </select>
+    </div>
+    <div class="field">
+      <label for="assign-version">Published programme version</label
+      ><select id="assign-version" class="native-select" formControlName="programVersionId">
+        <option value="">Select a version</option>
+        @for (v of publishedVersions(); track v.programVersionId) {
+          <option [value]="v.programVersionId">
+            {{ v.curriculum.pathwayCode }} · v{{ v.version }} · from
+            {{ v.curriculum.effectiveFrom }}
+          </option>
+        }
+      </select>
+      @if (!publishedVersions().length) {
+        <small class="muted">Publish a programme version under Training programmes first.</small>
+      }
+    </div>
+    <label class="approval-check"
+      ><input type="checkbox" formControlName="pin" /> Pin this version for training progress
+      (Learning Tracking)</label
+    >
+    @if (assignForm.touched && assignForm.invalid) {
+      <p class="field-error">Select a group and a programme version.</p>
+    }
+    <p-button
+      type="submit"
+      label="Save assignment"
+      [loading]="m.busy()"
+      [disabled]="!!assignmentPending()"
+    />
+    @if (assignmentNotice()) {
+      <p role="status">{{ assignmentNotice() }}</p>
+    }
+    @if (assignmentPending()) {
+      <p-button
+        label="Check assignment outcome"
+        [loading]="m.busy()"
+        (onClick)="checkAssignment()"
+      />
+    }
+  </form>
+</p-dialog>
+
+<p-dialog
+  header="End enrollment"
+  [visible]="!!endTarget()"
+  (visibleChange)="!$event && endTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!m.busy()"
+>
+  <form [formGroup]="endForm" (ngSubmit)="end()">
+    <p class="muted">The enrollment keeps its history. This cannot be undone from the web app.</p>
+    <div class="field">
+      <label for="end-status">Final status</label
+      ><select id="end-status" class="native-select" formControlName="status">
+        @for (s of terminalStatuses; track s) {
+          <option [value]="s">{{ s }}</option>
+        }
+      </select>
+    </div>
+    <p-button type="submit" label="Confirm" severity="danger" [loading]="m.busy()" />
+  </form>
+</p-dialog>

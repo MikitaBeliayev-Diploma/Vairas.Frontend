@@ -1,0 +1,247 @@
+<app-page-header
+  eyebrow="DOCUMENT MANAGEMENT"
+  heading="Training documents"
+  description="Generate documents from immutable evidence snapshots, review them and publish."
+/>
+<section class="panel form-panel">
+  <div class="document-toolbar">
+    <div class="field">
+      <label for="document-enrollment">Learner enrollment</label
+      ><select
+        class="native-select"
+        id="document-enrollment"
+        [ngModel]="enrollmentId()"
+        (ngModelChange)="change($event)"
+        [disabled]="busy() || !!pendingJob()"
+      >
+        @for (enrollment of auth.enrollments(); track enrollment.enrollmentId) {
+          <option [value]="enrollment.enrollmentId">
+            {{ enrollment.name }} · {{ enrollment.category }} · {{ enrollment.status }}
+          </option>
+        }
+      </select>
+    </div>
+    <div class="flex gap-3 flex-wrap">
+      <p-button
+        label="Generate practical journal"
+        [disabled]="!enrollmentId() || !!pendingJob()"
+        [loading]="busy()"
+        (onClick)="generate('journals')"
+      /><p-button
+        label="Generate completion report"
+        severity="secondary"
+        [disabled]="!enrollmentId() || !!pendingJob()"
+        [loading]="busy()"
+        (onClick)="generate('completion-reports')"
+      />
+    </div>
+  </div>
+  <p class="section-note">
+    Generation, evidence readiness and official reporting are separate outcomes. Reporting to
+    Regitra stays a manual step for school staff.
+  </p>
+  @if (snapshotIssues().length) {
+    <div class="feedback" role="status">
+      <strong>The evidence snapshot has open checks:</strong>
+      <ul class="requirement-list">
+        @for (issue of snapshotIssues(); track issue) {
+          <li>{{ issue }}</li>
+        }
+      </ul>
+    </div>
+  }
+  @if (pendingJob()) {
+    <div class="action-bar" role="status">
+      <span>Generation is in progress. Job {{ pendingJob() }}</span
+      ><p-button label="Check generation status" [loading]="busy()" (onClick)="poll()" />
+    </div>
+  }
+</section>
+<app-async-state
+  [loading]="loading()"
+  [error]="failed()"
+  [empty]="!loading() && !failed() && !documents().length"
+  title="No documents generated yet"
+  description="Select an enrollment and generate a journal or internal completion report."
+  (retry)="load()"
+/>
+@if (documents().length) {
+  <div class="flex gap-3 items-center flex-wrap" role="group" aria-label="Download format">
+    <span class="muted">Download as</span>
+    <label class="approval-check"
+      ><input
+        type="radio"
+        name="format"
+        [checked]="format() === 'pdf'"
+        (change)="format.set('pdf')"
+      />
+      PDF</label
+    >
+    <label class="approval-check"
+      ><input
+        type="radio"
+        name="format"
+        [checked]="format() === 'docx'"
+        (change)="format.set('docx')"
+      />
+      DOCX</label
+    >
+  </div>
+}
+<div class="document-grid">
+  @for (document of documents(); track document.jobId) {
+    <article class="panel form-panel">
+      <p class="eyebrow">{{ kindLabel(document.kind) }}</p>
+      @if (currentVersion(document); as version) {
+        <h2>Version {{ version.versionNo }}</h2>
+        <div class="flex gap-2 flex-wrap">
+          <app-status [value]="version.state" /><app-status [value]="version.evidenceStatus" />
+          @if (version.reviewed) {
+            <app-status value="Reviewed" />
+          }
+        </div>
+        <p class="document-readiness">
+          {{
+            version.evidenceStatus === 'Ready'
+              ? 'Evidence is complete for this version.'
+              : 'Review required: missing or unresolved evidence.'
+          }}
+          @if (version.state === 'Stale') {
+            Newer evidence exists; generate a new version.
+          }
+        </p>
+        <div class="flex gap-2 flex-wrap">
+          <p-button
+            [label]="'Download ' + format().toUpperCase()"
+            severity="secondary"
+            [disabled]="busy()"
+            (onClick)="download(document, version.documentVersionId)"
+          />
+          @if (version.state === 'Prepared') {
+            @if (!version.reviewed) {
+              <p-button
+                label="Mark reviewed"
+                [text]="true"
+                [disabled]="busy()"
+                (onClick)="openCommand(document, version, 'review')"
+              />
+            } @else {
+              <p-button
+                label="Publish"
+                [text]="true"
+                [disabled]="busy()"
+                (onClick)="openCommand(document, version, 'publish')"
+              />
+            }
+          }
+          @if (version.state === 'PublishedReview' || version.state === 'PublishedReady') {
+            <p-button
+              label="Withdraw"
+              [text]="true"
+              severity="danger"
+              [disabled]="busy()"
+              (onClick)="openCommand(document, version, 'withdraw')"
+            />
+          }
+        </div>
+        @if (canDeclare(document, version)) {
+          <app-reporting-declaration
+            [enrollmentId]="document.enrollmentId || enrollmentId()"
+            [snapshotId]="version.snapshotId"
+          />
+        }
+        @if ((document.versions?.length ?? 0) > 1) {
+          <details>
+            <summary>Earlier versions</summary>
+            <ul class="requirement-list">
+              @for (v of document.versions; track v.documentVersionId) {
+                @if (v.documentVersionId !== version.documentVersionId) {
+                  <li>
+                    Version {{ v.versionNo }} · {{ v.state }}
+                    <button
+                      type="button"
+                      class="text-link"
+                      [disabled]="busy()"
+                      (click)="download(document, v.documentVersionId)"
+                    >
+                      Download
+                    </button>
+                  </li>
+                }
+              }
+            </ul>
+          </details>
+        }
+      } @else {
+        <h2>{{ document.createdAt | schoolDate: 'date' }}</h2>
+        <div class="flex gap-2 flex-wrap">
+          <app-status [value]="document.status" /><app-status
+            [value]="document.documentState ?? 'Prepared'"
+          />
+        </div>
+        <p class="document-readiness">
+          {{
+            document.ready
+              ? 'Evidence is complete.'
+              : 'Review required: missing or unresolved evidence.'
+          }}
+        </p>
+        <ul class="requirement-list">
+          @for (item of document.missingItems ?? []; track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
+        <p-button
+          label="Download sample"
+          severity="secondary"
+          [disabled]="!document.documentId || busy()"
+          (onClick)="download(document)"
+        />
+      }
+    </article>
+  }
+</div>
+
+<p-dialog
+  [header]="
+    commandTarget()?.command === 'review'
+      ? 'Mark version reviewed'
+      : commandTarget()?.command === 'publish'
+        ? 'Publish version'
+        : 'Withdraw version'
+  "
+  [visible]="!!commandTarget()"
+  (visibleChange)="!$event && commandTarget.set(null)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!busy()"
+>
+  <div class="field">
+    <label for="document-reason">{{
+      commandTarget()?.command === 'withdraw' ? 'Reason' : 'Note (what you checked)'
+    }}</label
+    ><textarea
+      pInputText
+      id="document-reason"
+      rows="3"
+      maxlength="1000"
+      [ngModel]="reason()"
+      (ngModelChange)="reason.set($event)"
+    ></textarea>
+  </div>
+  @if (commandTarget()?.command === 'publish') {
+    <p class="muted">
+      {{
+        commandTarget()?.version?.evidenceStatus === 'Ready'
+          ? 'Evidence is complete: the version is published as ready.'
+          : 'Evidence is incomplete: the version is published for review only.'
+      }}
+    </p>
+  }
+  <p-button
+    label="Confirm"
+    [disabled]="!reason().trim()"
+    [loading]="busy()"
+    (onClick)="command()"
+  />
+</p-dialog>

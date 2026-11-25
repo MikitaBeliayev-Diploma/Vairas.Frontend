@@ -1,0 +1,120 @@
+<app-page-header
+  eyebrow="LEARNING TRACKING"
+  heading="Theory attendance record"
+  description="The full group roster of one completed theory lesson."
+>
+  <a routerLink="/schedule" class="button-link secondary">Back to schedule</a>
+</app-page-header>
+<app-async-state [loading]="loading()" [error]="failed()" (retry)="load()" />
+@if (record(); as record) {
+  <p class="section-note">
+    @if (lesson(); as lesson) {
+      {{ lesson.title }} ·
+      {{ lesson.actualStart ?? lesson.startsAt | schoolDate }}
+      ·
+    }
+    Record revision {{ record.revision }} · Fact version {{ record.factVersion }}
+  </p>
+  <section class="panel form-panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ record.facts.trainingMinutes }} teaching minutes</h2>
+        <p class="muted">
+          {{ presentCount() }} of {{ rows().length }} learners present.
+          @if (record.facts.durationExplanation) {
+            Duration: {{ record.facts.durationExplanation }}
+          }
+        </p>
+      </div>
+      <app-status [value]="record.status" />
+    </div>
+    <p class="feedback" role="note">
+      Theory policy: the assigned teacher confirms this record once. Learners do not confirm or
+      dispute theory attendance; the practical dual-confirmation rule does not apply.
+    </p>
+    @switch (record.status) {
+      @case ('Pending') {
+        <p>
+          Not confirmed yet. Present learners receive no minutes until the assigned teacher confirms
+          this exact version.
+        </p>
+      }
+      @case ('Confirmed') {
+        <p>
+          Confirmed {{ record.confirmedAt | schoolDate }}. Present learners receive
+          {{ record.facts.trainingMinutes }} minutes; absent learners receive none.
+        </p>
+      }
+      @default {
+        <p>
+          The lesson source changed after confirmation (for example, a corrected actual interval).
+          These minutes do not count until a corrected version is recorded and confirmed.
+        </p>
+      }
+    }
+    @if (canCorrect() && !correction()) {
+      <p-button
+        label="Correct attendance"
+        severity="secondary"
+        [disabled]="busy()"
+        (onClick)="startCorrection()"
+      />
+    }
+    @if (canConfirm() && !correction()) {
+      <p-button label="Confirm theory attendance" [loading]="busy()" (onClick)="confirm()" />
+    }
+  </section>
+  @if (correction(); as c) {
+    <section class="panel form-panel" aria-label="Correct theory attendance">
+      <h2>Correct theory attendance</h2>
+      <p>The existing confirmation will not carry over to the new version.</p>
+      <div class="field">
+        <label for="theory-correction-reason">Correction reason</label>
+        <input pInputText id="theory-correction-reason" [formControl]="correctionReason" />
+        @if (correctionReason.touched && !correctionReason.value.trim()) {
+          <small class="field-error">Enter a reason.</small>
+        }
+      </div>
+      <app-theory-attendance-form
+        [roster]="c.roster"
+        [physicalMinutes]="c.minutes"
+        [initial]="c.initial"
+        [busy]="busy()"
+        submitLabel="Save corrected attendance"
+        (submitted)="revise($event)"
+      />
+      <p-button
+        label="Cancel correction"
+        severity="secondary"
+        [disabled]="busy()"
+        (onClick)="correction.set(null)"
+      />
+    </section>
+  }
+  <section class="panel">
+    <table class="theory-roster" aria-label="Recorded theory attendance">
+      <thead>
+        <tr>
+          <th scope="col">Learner</th>
+          <th scope="col">Attendance</th>
+          <th scope="col">Credited minutes</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.enrollmentId) {
+          <tr>
+            <td>
+              <strong>{{ row.name }}</strong
+              ><small class="muted"> · enrollment {{ row.enrollmentId.slice(0, 8) }}</small>
+            </td>
+            <td>{{ row.attendance }}</td>
+            <td>{{ record.status === 'Confirmed' ? row.minutes : 0 }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}
+@if (error()) {
+  <p class="feedback error" role="alert">{{ error() }}</p>
+}

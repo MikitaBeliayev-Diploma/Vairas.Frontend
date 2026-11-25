@@ -1,0 +1,84 @@
+﻿<app-page-header
+  eyebrow="LEARNING TRACKING"
+  heading="Theory attendance"
+  description="Record who attended a completed group theory lesson."
+>
+  <a routerLink="/schedule" class="button-link secondary">Back to schedule</a>
+</app-page-header>
+<p class="feedback" role="note">
+  Theory attendance is confirmed once by the assigned teacher under the theory policy. Learners do
+  not confirm or dispute theory records: the practical dual-confirmation rule does not apply.
+</p>
+@if (knownRecordId(); as recordId) {
+  <section class="panel form-panel">
+    <h2>Attendance already recorded</h2>
+    <p class="muted">Learning Tracking returned an existing attendance record for this lesson.</p>
+    <a [routerLink]="['/records/theory', recordId]" class="text-link">Open the theory record</a>
+  </section>
+} @else {
+  <app-async-state [loading]="loading()" [error]="failed()" (retry)="load()" />
+  @if (!loading() && !failed()) {
+    @if (lesson(); as lesson) {
+      <section class="panel form-panel">
+        <div class="panel-header">
+          <div>
+            <h2>
+              Theory lesson ·
+              {{ lesson.actualStart ?? lesson.startsAt | schoolDate }}
+            </h2>
+            <p class="muted">
+              @if (source(); as source) {
+                Verified actual interval {{ source.actualStart | schoolDate: 'time' }} –
+                {{ source.actualEnd | schoolDate: 'time' }} · lesson revision
+                {{ source.lessonRevision }}
+              } @else {
+                Planned {{ lesson.startsAt | schoolDate: 'time' }} –
+                {{ lesson.endsAt | schoolDate: 'time' }}
+              }
+            </p>
+          </div>
+          <app-status [value]="lesson.status" />
+        </div>
+        @if (blocker(); as reason) {
+          <p class="feedback" role="note">{{ reason }}</p>
+        } @else if (minutes(); as physical) {
+          <p class="muted">
+            Learners are taken from the lesson's group. Learning Tracking compares them with the
+            retained group roster at the time of the lesson and rejects any difference.
+          </p>
+          <app-theory-attendance-form
+            [roster]="roster()"
+            [physicalMinutes]="physical"
+            [busy]="busy()"
+            (submitted)="submit($event)"
+          />
+        }
+      </section>
+    } @else if (blocker(); as reason) {
+      <p class="feedback" role="note">{{ reason }}</p>
+    }
+  }
+}
+@if (error()) {
+  <p class="feedback error" role="alert">{{ error() }}</p>
+}
+@if (askForExisting()) {
+  <section class="panel form-panel">
+    <h2>Open the existing record</h2>
+    <p class="muted">
+      Learning Tracking reads theory records by ID only. Enter the record ID shared by whoever
+      created it.
+    </p>
+    <div class="field">
+      <label for="theory-existing-id">Theory record ID</label
+      ><input
+        pInputText
+        id="theory-existing-id"
+        placeholder="UUID"
+        [ngModel]="existingId()"
+        (ngModelChange)="existingId.set($event)"
+      />
+    </div>
+    <p-button label="Open record" severity="secondary" (onClick)="openExisting()" />
+  </section>
+}

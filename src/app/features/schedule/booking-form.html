@@ -1,0 +1,168 @@
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="segmented" role="group" aria-label="Lesson type">
+    <button
+      type="button"
+      [class.selected]="kind() === 'Practical'"
+      [attr.aria-pressed]="kind() === 'Practical'"
+      (click)="setKind('Practical')"
+    >
+      Practical
+    </button>
+    <button
+      type="button"
+      [class.selected]="kind() === 'Theory'"
+      [attr.aria-pressed]="kind() === 'Theory'"
+      (click)="setKind('Theory')"
+    >
+      Theory
+    </button>
+  </div>
+  @if ((catalog().branches?.length ?? 0) > 0) {
+    <div class="field">
+      <label for="booking-branch">Branch</label
+      ><select id="booking-branch" class="native-select" formControlName="branchId">
+        @for (b of catalog().branches; track b.id) {
+          <option [value]="b.id">{{ b.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  @if (kind() === 'Practical') {
+    <div class="field">
+      <label for="booking-learner">Learner</label
+      ><p-select
+        inputId="booking-learner"
+        ariaLabel="Learner"
+        [options]="activeEnrollments()"
+        optionLabel="name"
+        optionValue="enrollmentId"
+        formControlName="enrollmentId"
+        placeholder="Select a learner"
+        [filter]="true"
+        filterBy="name,category"
+      />
+    </div>
+  } @else {
+    <div class="form-grid">
+      <div class="field">
+        <label for="booking-group">Group</label
+        ><select id="booking-group" class="native-select" formControlName="groupId">
+          <option value="">Select a group</option>
+          @for (g of catalog().groups ?? []; track g.id) {
+            <option [value]="g.id">{{ g.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="booking-category">Category</label
+        ><select id="booking-category" class="native-select" formControlName="category">
+          @for (c of categories(); track c) {
+            <option [value]="c">{{ c }}</option>
+          }
+        </select>
+      </div>
+    </div>
+  }
+  <div class="field">
+    <label for="booking-instructor">{{ kind() === 'Practical' ? 'Instructor' : 'Teacher' }}</label
+    ><p-select
+      inputId="booking-instructor"
+      ariaLabel="Instructor"
+      [options]="catalog().teachers"
+      optionLabel="name"
+      optionValue="id"
+      formControlName="teacherId"
+      placeholder="Select a teacher"
+    />
+  </div>
+  @if (kind() === 'Practical') {
+    <div class="field">
+      <label for="booking-vehicle">Vehicle</label
+      ><p-select
+        inputId="booking-vehicle"
+        ariaLabel="Vehicle"
+        [options]="catalog().vehicles"
+        optionLabel="label"
+        optionValue="id"
+        formControlName="vehicleId"
+        placeholder="Select an active vehicle"
+      />
+    </div>
+  }
+  <div class="form-grid">
+    <div class="field">
+      <label for="booking-start">Starts · Vilnius</label
+      ><input id="booking-start" pInputText type="datetime-local" formControlName="startsAt" />
+    </div>
+    <div class="field">
+      <label for="booking-duration">Duration · minutes</label
+      ><input
+        id="booking-duration"
+        pInputText
+        type="number"
+        min="15"
+        max="240"
+        step="5"
+        formControlName="duration"
+      />
+    </div>
+  </div>
+  @if (kind() === 'Practical') {
+    <div class="field">
+      <label for="booking-reason">Reason · optional</label
+      ><textarea
+        pInputText
+        id="booking-reason"
+        rows="2"
+        formControlName="reason"
+        aria-describedby="booking-reason-hint"
+        placeholder="e.g. additional lesson for an outstanding requirement"
+      ></textarea>
+      <small id="booking-reason-hint" class="muted"
+        >Recorded with the lesson and cannot be changed later. Up to
+        {{ reasonMax }} characters.</small
+      >
+      @if (form.controls.reason.invalid) {
+        <small class="field-error" role="alert"
+          >Use no more than {{ reasonMax }} characters for the reason.</small
+        >
+      }
+    </div>
+  }
+  <details class="field">
+    <summary>Find free slots</summary>
+    <div class="form-grid">
+      <div class="field">
+        <label for="booking-day">Day</label
+        ><input id="booking-day" pInputText type="date" formControlName="searchDay" />
+      </div>
+      <p-button
+        type="button"
+        label="Search availability"
+        severity="secondary"
+        [loading]="searching()"
+        (onClick)="findSlots()"
+      />
+    </div>
+    @if (slots(); as slots) {
+      <div class="suggestions" role="list" aria-label="Free slots">
+        @for (slot of slots; track slot.startsAt) {
+          <button type="button" role="listitem" (click)="pick(slot)">
+            {{ slot.startsAt | schoolDate: 'time' }}–{{ slot.endsAt | schoolDate: 'time' }}
+          </button>
+        } @empty {
+          <p class="muted">No free slot of this length on that day.</p>
+        }
+      </div>
+    }
+  </details>
+  @if (error()) {
+    <p role="alert" class="field-error">{{ error() }}</p>
+  }
+  <p-button
+    type="submit"
+    [label]="kind() === 'Practical' ? 'Book practical lesson' : 'Book theory lesson'"
+    [loading]="busy()"
+    [disabled]="locked()"
+  />
+</form>

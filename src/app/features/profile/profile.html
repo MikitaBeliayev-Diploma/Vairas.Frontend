@@ -1,0 +1,66 @@
+<app-page-header
+  heading="Your profile"
+  description="Keep your personal and contact details up to date."
+/><app-async-state [loading]="loading()" [error]="failed()" (retry)="load()" />
+@if (!loading() && profile()) {
+  <section class="panel form-panel narrow-panel">
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <div class="form-grid">
+        <div class="field">
+          <label for="first-name">First name</label
+          ><input
+            pInputText
+            id="first-name"
+            autocomplete="given-name"
+            formControlName="firstName"
+          />
+        </div>
+        <div class="field">
+          <label for="last-name">Last name</label
+          ><input pInputText id="last-name" autocomplete="family-name" formControlName="lastName" />
+        </div>
+        <div class="field">
+          <label for="contact-email">Contact email</label
+          ><input
+            pInputText
+            id="contact-email"
+            type="email"
+            autocomplete="email"
+            formControlName="emailAddress"
+          />
+        </div>
+        <div class="field">
+          <label for="phone">Phone</label
+          ><input
+            pInputText
+            id="phone"
+            type="tel"
+            autocomplete="tel"
+            formControlName="phoneNumber"
+          />
+        </div>
+      </div>
+      @if (form.touched && form.invalid) {
+        <p class="field-error" role="alert">
+          Enter your first and last name and a valid contact email.
+        </p>
+      }
+      @if (stale()) {
+        <div class="feedback error">
+          <p>
+            The update was not confirmed. Reload to review the latest profile before submitting a
+            new change.
+          </p>
+          <p-button label="Reload profile" severity="secondary" (onClick)="load()" />
+        </div>
+      }
+      <div class="form-footer">
+        <p>
+          Profile revision {{ profile()!.revision }}. Contact email does not change your sign-in
+          identity.
+        </p>
+        <p-button type="submit" label="Save profile" [loading]="busy()" [disabled]="stale()" />
+      </div>
+    </form>
+  </section>
+}

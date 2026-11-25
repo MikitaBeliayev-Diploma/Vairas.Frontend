@@ -1,0 +1,97 @@
+<app-page-header
+  eyebrow="YOUR LEARNING, CONNECTED"
+  [heading]="'Welcome back, ' + firstName() + '.'"
+  description="A clear view of what’s next and what needs your attention."
+  ><a routerLink="/schedule" class="button-link">View schedule</a></app-page-header
+>
+<app-async-state
+  [loading]="workspace.loading()"
+  [error]="workspace.failed()"
+  (retry)="workspace.load()"
+/>
+@if (!workspace.loading() && !workspace.failed()) {
+  <div class="stats-grid">
+    <article class="stat-card">
+      <span class="stat-icon teal"><app-icon name="calendar" /></span>
+      <p>Upcoming lessons</p>
+      <strong>{{ upcoming().length }}</strong
+      ><small>In the current schedule</small>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon blue"><app-icon name="check" /></span>
+      <p>Completed lessons</p>
+      <strong>{{ completed() }}</strong
+      ><small>Completion is separate from credit</small>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon amber"><app-icon name="document" /></span>
+      <p>Records awaiting review</p>
+      <strong>{{ progress()?.pendingRecordCount ?? '—' }}</strong
+      ><small>Selected enrollment</small>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon violet"><app-icon name="chart" /></span>
+      <p>Confirmed practical time</p>
+      <strong>{{ progress()?.practicalMinutes ?? '—' }}<span> min</span></strong
+      ><small>Both participants confirmed</small>
+    </article>
+  </div>
+  <div class="dashboard-columns">
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">ON THE ROAD</p>
+          <h2>Coming up next</h2>
+        </div>
+        <a routerLink="/schedule" class="text-link">All lessons</a>
+      </div>
+      <div class="lesson-list">
+        @for (lesson of upcoming().slice(0, 4); track lesson.lessonId) {
+          <a routerLink="/schedule" class="lesson-row"
+            ><div class="lesson-date">
+              <strong>{{ lesson.startsAt | schoolDate: 'date' }}</strong
+              ><span>{{ lesson.startsAt | schoolDate: 'time' }}</span>
+            </div>
+            <div class="lesson-info">
+              <strong>{{ lesson.title }}</strong
+              ><span>{{ lesson.teacherName }} · {{ lesson.vehicleLabel }}</span
+              ><small>{{ lesson.studentName }}</small>
+              @if (lesson.reason) {
+                <small class="lesson-reason">Reason: {{ lesson.reason }}</small>
+              }
+            </div>
+            <app-status [value]="lesson.status"
+          /></a>
+        } @empty {
+          <app-async-state
+            [empty]="true"
+            title="Your schedule is clear"
+            description="Confirmed lessons will appear here."
+          />
+        }
+      </div>
+    </section>
+    <aside class="dashboard-side">
+      <section class="assistant-card">
+        <span class="assistant-emblem"><app-icon name="spark" /></span>
+        <p class="eyebrow">A LITTLE HELP, WHEN YOU NEED IT</p>
+        <h2>Meet your training assistant.</h2>
+        <p>
+          Find your next lesson, understand your progress or review an action before confirming it.
+        </p>
+        <a routerLink="/assistant" class="button-link">Open AI Assistance</a>
+      </section>
+      <section class="panel next-step">
+        <p class="eyebrow">GOOD TO KNOW</p>
+        <h3>Confirmed facts move you forward.</h3>
+        <p>
+          A completed lesson becomes practical credit after the instructor and student confirm the
+          same record version.
+        </p>
+        <a [routerLink]="'/training/' + auth.session()?.enrollmentId" class="text-link"
+          >Review training records</a
+        >
+      </section>
+    </aside>
+  </div>
+}

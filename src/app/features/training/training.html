@@ -1,0 +1,297 @@
+﻿<app-page-header
+  eyebrow="LEARNING TRACKING"
+  [heading]="enrollment()?.name ? enrollment()!.name + ' · Training' : 'Training progress'"
+  description="Confirmed learning, outstanding requirements and current records."
+>
+  @if (auth.has('Instructor')) {
+    <p-button
+      label="Create practical record"
+      [disabled]="!availableLessons().length || !auth.catalog()"
+      (onClick)="dialog.set(true)"
+    />
+  }
+</app-page-header>
+<app-async-state [loading]="loading()" [error]="failed()" (retry)="load()" />
+@if (!loading() && !failed()) {
+  @if (progress(); as progress) {
+    <div class="training-grid">
+      <section class="panel form-panel">
+        <p class="eyebrow">CONFIRMED PRACTICAL TRAINING</p>
+        <div class="progress-total">{{ progress.practicalMinutes }}<span>minutes</span></div>
+        <div
+          class="progress-track"
+          role="progressbar"
+          [attr.aria-valuenow]="progress.percent ?? 0"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="Practical training progress"
+        >
+          <progress [value]="progress.percent ?? 0" max="100">{{ progress.percent }}%</progress>
+        </div>
+        <p class="muted">
+          {{
+            progress.percent === null || progress.percent === undefined
+              ? 'Requirements not verified yet'
+              : progress.percent + '% of the assigned programme'
+          }}
+        </p>
+        <p>
+          Theory: {{ progress.theoryMinutes }} confirmed minutes{{
+            progress.theoryDeficitMinutes
+              ? ' · ' + progress.theoryDeficitMinutes + ' remaining'
+              : ''
+          }}
+        </p>
+        <p class="muted">
+          Theory attendance is confirmed once by the assigned teacher; learners do not confirm it.
+        </p>
+        @if (progress.pendingRecordCount || progress.disputedRecordCount) {
+          <p class="feedback" role="note">
+            {{ progress.pendingRecordCount }} pending and {{ progress.disputedRecordCount ?? 0 }}
+            disputed record(s) count as zero: practical records until both participants confirm the
+            current version, theory attendance until the assigned teacher confirms it.
+          </p>
+        }
+        @if (progress.sourcesVerified === false) {
+          <p class="muted">
+            The programme sources are not verified, so progress is not calculated.
+          </p>
+        }
+      </section>
+      <section class="panel form-panel">
+        <p class="eyebrow">YOUR NEXT STEPS</p>
+        <h2>Outstanding requirements</h2>
+        <ul class="requirement-list">
+          @for (requirement of progress.outstandingRequirements; track requirement) {
+            <li>{{ requirement }}</li>
+          } @empty {
+            <li>No outstanding requirements. Readiness still requires an assessor decision.</li>
+          }
+        </ul>
+      </section>
+    </div>
+  }
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Practical training records</h2>
+        <p class="muted">
+          Only the current, dual-confirmed version counts towards practical progress.
+        </p>
+      </div>
+    </div>
+    <div class="record-list">
+      @for (record of records(); track record.recordId) {
+        <a [routerLink]="['/records', record.recordId]" class="record-row"
+          ><div>
+            <strong>{{ record.lessonTitle ?? 'Practical training' }}</strong
+            ><small
+              >{{ record.occurredAt ? (record.occurredAt | schoolDate) + ' · ' : '' }}Fact version
+              {{ record.factVersion
+              }}{{ record.creditEligible ? ' · counts towards progress' : '' }}</small
+            >
+          </div>
+          <div>
+            <strong>{{ record.facts.trainingMinutes }} min</strong
+            ><small>{{ record.facts.distanceKm }} km</small>
+          </div>
+          <app-status [value]="record.status" /><span class="text-link">Review record</span></a
+        >
+      } @empty {
+        <app-async-state
+          [empty]="true"
+          title="No practical records yet"
+          description="Complete a practical lesson before creating its record."
+        />
+      }
+    </div>
+  </section>
+  @if (auth.has('Administrator', 'Instructor')) {
+    <section class="panel form-panel readiness-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">HUMAN REVIEW</p>
+          <h2>Assessment readiness</h2>
+          <p class="muted">Prerequisite evaluation and the assessor decision are separate steps.</p>
+        </div>
+        <div class="field">
+          <label for="readiness-assessment">Assessment definition</label>
+          <select
+            id="readiness-assessment"
+            class="native-select"
+            [value]="assessmentDefinitionId()"
+            [disabled]="busy()"
+            (change)="selectAssessment($event)"
+          >
+            <option value="">Select an assessment</option>
+            @for (definition of assessmentDefinitions(); track definition.definitionVersionId) {
+              <option [value]="definition.definitionVersionId">
+                {{ definition.name }} · {{ definition.trainingKind }} · {{ definition.stage }}
+              </option>
+            }
+          </select>
+          <p class="muted">
+            Final assessments use readiness evaluation. Midterm assessments do not require a final
+            readiness decision.
+          </p>
+        </div>
+        <p-button
+          label="Evaluate prerequisites"
+          [disabled]="!selectedFinalAssessment() || busy()"
+          severity="secondary"
+          [loading]="busy()"
+          (onClick)="evaluate()"
+        />
+      </div>
+      @if (!assessmentDefinitionId()) {
+        <p class="muted">Select the exact assessment definition before evaluating prerequisites.</p>
+      }
+      @if (readiness(); as readiness) {
+        <div class="flex gap-2 flex-wrap">
+          <app-status [value]="readiness.decision" />
+          @if (readiness.formalStatus) {
+            <app-status [value]="readiness.formalStatus" />
+          }
+          @if (readiness.invalidated) {
+            <app-status value="Stale" />
+          }
+        </div>
+        @if (readiness.invalidated) {
+          <p class="muted">
+            @if (readiness.decisionInvalidatedAt) {
+              The previous decision was invalidated at
+              {{ readiness.decisionInvalidatedAt | schoolDate }}.
+            }
+            Newer evidence exists. Evaluate prerequisites again.
+          </p>
+        }
+        <p>
+          {{
+            readiness.prerequisitesSatisfied
+              ? 'All current prerequisites are satisfied.'
+              : 'Approval is blocked by outstanding requirements.'
+          }}
+        </p>
+        <ul class="requirement-list">
+          @for (item of readiness.outstandingRequirements; track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
+        @if (
+          auth.session()?.assessor && readiness.decision === 'Pending' && !readiness.invalidated
+        ) {
+          <form [formGroup]="decisionForm">
+            <div class="field">
+              <label for="readiness-reason">Decision reason</label
+              ><textarea
+                pInputText
+                id="readiness-reason"
+                rows="3"
+                formControlName="reason"
+              ></textarea>
+              @if (decisionForm.controls.reason.touched && decisionForm.controls.reason.invalid) {
+                <small class="field-error">Enter a decision reason.</small>
+              }
+            </div>
+            <div class="flex gap-3 flex-wrap">
+              <p-button
+                label="Approve readiness"
+                [disabled]="
+                  !readiness.prerequisitesSatisfied ||
+                  readiness.decision !== 'Pending' ||
+                  !!readiness.invalidated
+                "
+                [loading]="busy()"
+                (onClick)="decide('Approved')"
+              /><p-button
+                label="Decline readiness"
+                severity="secondary"
+                [disabled]="readiness.decision !== 'Pending' || !!readiness.invalidated"
+                [loading]="busy()"
+                (onClick)="decide('NotApproved')"
+              />
+            </div>
+          </form>
+        }
+      }
+    </section>
+    <app-assessments-panel
+      [enrollmentId]="enrollmentId()"
+      [readiness]="readiness()"
+      [availableDefinitions]="assessmentDefinitions()"
+    />
+  }
+}
+<p-dialog
+  header="Create practical record"
+  [visible]="dialog()"
+  (visibleChange)="dialog.set($event)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!busy()"
+  ><form [formGroup]="form" (ngSubmit)="create()">
+    <p class="muted">
+      Record verified teaching minutes. They must not exceed the actual lesson interval.
+    </p>
+    <div class="field">
+      <label for="record-lesson">Completed lesson</label
+      ><select id="record-lesson" class="native-select" formControlName="lessonId">
+        <option value="">Select a lesson</option>
+        @for (lesson of availableLessons(); track lesson.lessonId) {
+          <option [value]="lesson.lessonId">{{ lessonLabel(lesson) }}</option>
+        }
+      </select>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="record-minutes">Teaching minutes</label
+        ><input
+          pInputText
+          id="record-minutes"
+          type="number"
+          min="1"
+          step="1"
+          formControlName="trainingMinutes"
+        />
+      </div>
+      <div class="field">
+        <label for="record-distance">Distance · km</label
+        ><input
+          pInputText
+          id="record-distance"
+          type="number"
+          min="0"
+          step="0.1"
+          formControlName="distanceKm"
+        />
+      </div>
+    </div>
+    <div class="field">
+      <label for="record-topic">Training topic</label
+      ><select id="record-topic" class="native-select" formControlName="topicId">
+        <option value="">Select a topic</option>
+        @for (t of topics(); track t.id) {
+          <option [value]="t.id">{{ t.name }}</option>
+        }
+        <option value="__manual">Enter a topic ID</option>
+      </select>
+    </div>
+    @if (form.controls.topicId.value === '__manual') {
+      <div class="field">
+        <label for="record-topic-id">Topic ID from the programme</label
+        ><input
+          pInputText
+          id="record-topic-id"
+          formControlName="manualTopicId"
+          placeholder="UUID"
+        />
+      </div>
+    }
+    @if (form.touched && form.invalid) {
+      <p class="field-error">Complete all fields with valid values.</p>
+    }
+    @if (formError()) {
+      <p class="field-error" role="alert">{{ formError() }}</p>
+    }
+    <p-button type="submit" label="Save practical record" [loading]="busy()" /></form
+></p-dialog>

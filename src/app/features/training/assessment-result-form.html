@@ -1,0 +1,79 @@
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="form-grid">
+    <div class="field">
+      <label for="result-definition">Performed assessment</label
+      ><select id="result-definition" class="native-select" formControlName="definitionId">
+        <option value="">Select an assessment</option>
+        @for (d of definitions(); track d.id) {
+          <option [value]="d.id">{{ d.name }}{{ d.stage ? ' · ' + d.stage : '' }}</option>
+        }
+      </select>
+    </div>
+    <div class="field">
+      <label for="result-mark">Mark</label
+      ><input
+        pInputText
+        id="result-mark"
+        type="number"
+        step="1"
+        [attr.min]="definition()?.minimumMark ?? null"
+        [attr.max]="definition()?.maximumMark ?? null"
+        formControlName="mark"
+      />
+      @if (scale(); as d) {
+        <small class="muted"
+          >Scale {{ d.minimumMark }}–{{ d.maximumMark }} · passing mark {{ d.passingMark
+          }}{{ outcome() ? ' · ' + outcome() : '' }}</small
+        >
+      } @else {
+        <small class="muted"
+          >The scale is checked by Learning Tracking; the outcome is derived from the pinned passing
+          mark.</small
+        >
+      }
+    </div>
+  </div>
+  <div class="form-grid">
+    <div class="field">
+      <label for="result-time">Performed at · Vilnius</label
+      ><input id="result-time" pInputText type="datetime-local" formControlName="assessedAt" />
+    </div>
+    <div class="field">
+      <label for="result-appointment">Appointment</label
+      ><select id="result-appointment" class="native-select" formControlName="appointmentId">
+        <option value="">No appointment</option>
+        @for (a of selectableAppointments(); track a.appointmentId) {
+          <option [value]="a.appointmentId">
+            {{ a.startsAt | schoolDate }} · {{ a.appointmentId.slice(0, 8) }}
+          </option>
+        }
+        <option value="__manual">Enter an appointment ID</option>
+      </select>
+    </div>
+  </div>
+  @if (form.controls.appointmentId.value === '__manual') {
+    <div class="field">
+      <label for="result-appointment-id">Appointment ID</label
+      ><input
+        pInputText
+        id="result-appointment-id"
+        formControlName="manualAppointmentId"
+        placeholder="UUID"
+      />
+    </div>
+  }
+  <div class="field">
+    <label for="result-comment">Comment</label
+    ><textarea
+      pInputText
+      id="result-comment"
+      rows="2"
+      formControlName="comment"
+      [attr.maxlength]="commentMax"
+    ></textarea>
+  </div>
+  @if (error()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+  <p-button type="submit" label="Record assessment result" [loading]="busy()" />
+</form>

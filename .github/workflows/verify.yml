@@ -1,0 +1,56 @@
+name: Frontend verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run setup:coverage
+      - run: npm run test:coverage
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: coverage/
+          if-no-files-found: warn
+
+  live-e2e:
+    # Never run arbitrary fork code on a persistent self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64, vairas-local-backend]
+    timeout-minutes: 60
+    concurrency:
+      group: vairas-local-e2e
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start isolated backend and run browser checks
+        shell: pwsh
+        run: ./scripts/verify-live.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-e2e
+          path: test-results/
+          if-no-files-found: warn

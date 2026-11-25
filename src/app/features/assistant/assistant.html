@@ -1,0 +1,129 @@
+<app-page-header
+  eyebrow="CONVERSATIONAL WORKSPACE"
+  heading="AI Assistance"
+  description="Ask about your training. Stay in control of every change."
+/>
+<div class="chat-layout">
+  <section class="panel chat-panel">
+    <div class="chat-top">
+      <span class="assistant-emblem small"><app-icon name="spark" /></span>
+      <div>
+        <strong>Vairas Assistant</strong
+        ><small>AI assistant · answers are generated and may be incomplete</small>
+      </div>
+      @if (messages().length) {
+        <p-button
+          label="New conversation"
+          size="small"
+          [text]="true"
+          class="ml-auto"
+          [disabled]="busy()"
+          (onClick)="newConversation()"
+        />
+      }
+    </div>
+    <p class="section-note" role="note">
+      You are talking to an AI system. Vairas re-checks every proposed change on the server, and
+      nothing changes without your explicit confirmation. You can always use the
+      <a routerLink="/schedule" class="text-link">Schedule</a> page instead.
+    </p>
+    <div class="chat-messages" role="log" aria-label="Conversation" aria-live="polite">
+      @if (historyLoading()) {
+        <p class="typing-state" role="status">Loading your conversation…</p>
+      }
+      @if (!messages().length && !historyLoading()) {
+        <div class="chat-welcome">
+          <span class="assistant-emblem"><app-icon name="spark" /></span>
+          <h2>What would you like to know?</h2>
+          <p>Start with your next lesson or your confirmed training progress.</p>
+          <div class="suggestions">
+            <button (click)="send('Show my lessons')">Show my lessons</button
+            ><button (click)="send('Show my progress')">Show my progress</button>
+            @if (auth.has('Administrator')) {
+              <button (click)="send('Book a lesson')">Preview a lesson booking</button
+              ><button (click)="send('Reschedule a lesson')">Preview a rescheduling</button>
+            }
+          </div>
+        </div>
+      }
+      @for (message of messages(); track message.messageId) {
+        <article class="chat-message" [class.user-message]="message.role === 'user'">
+          <small>{{ message.role === 'user' ? 'You' : 'Vairas Assistant' }}</small>
+          <p>{{ message.text }}</p>
+        </article>
+      }
+      @if (busy()) {
+        <p class="typing-state" role="status">Working with your current context…</p>
+      }
+      @if (error()) {
+        <p class="feedback error" role="alert">{{ error() }}</p>
+      }
+      @if (preview(); as preview) {
+        @if (!canExecute()) {
+          <div class="feedback" role="note">
+            This conversation can preview the action but not execute it. Review the details and use
+            the <a routerLink="/schedule" class="text-link">Schedule</a> page to make the change.
+          </div>
+        }
+        <app-action-confirmation
+          [preview]="preview"
+          [catalog]="auth.catalog()"
+          [busy]="busy() || unknown() || !canExecute()"
+          [completed]="committed()"
+          [invalidated]="invalidated()"
+          (approved)="approve()"
+          (cancelled)="this.preview.set(null)"
+        />
+      }
+      @if (unknown()) {
+        <div class="feedback error">
+          <div>
+            <strong>The action outcome is not confirmed.</strong>
+            <p>Keep this operation and check its status before submitting another change.</p>
+            <p-button
+              label="Check action status"
+              severity="secondary"
+              [loading]="busy()"
+              (onClick)="reconcile()"
+            />
+          </div>
+        </div>
+      }
+    </div>
+    <form class="chat-composer" (ngSubmit)="send()">
+      <label class="sr-only" for="chat-message">Message the assistant</label
+      ><textarea
+        pInputText
+        id="chat-message"
+        name="message"
+        rows="2"
+        maxlength="2000"
+        placeholder="Ask about your schedule or training…"
+        [ngModel]="text()"
+        (ngModelChange)="text.set($event)"
+        [disabled]="busy() || unknown()"
+      ></textarea
+      ><p-button
+        type="submit"
+        label="Send message"
+        [disabled]="!text().trim() || busy() || unknown()"
+      />
+    </form>
+  </section>
+  <aside class="panel form-panel chat-context">
+    <p class="eyebrow">CURRENT CONTEXT</p>
+    <h3>{{ auth.schoolName() }}</h3>
+    <dl>
+      <dt>Role</dt>
+      <dd>{{ auth.role() }}</dd>
+      <dt>Identity</dt>
+      <dd>{{ auth.session()?.name }}</dd>
+    </dl>
+    <hr />
+    <h3>You stay in control.</h3>
+    <p>
+      The assistant can only use your authorized context. Changes require an exact preview, your
+      confirmation and a fresh server check.
+    </p>
+  </aside>
+</div>

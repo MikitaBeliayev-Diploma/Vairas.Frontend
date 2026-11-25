@@ -1,0 +1,77 @@
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <div class="form-grid">
+    <div class="field">
+      <label for="appointment-teacher">Assessor</label
+      ><select id="appointment-teacher" class="native-select" formControlName="teacherId">
+        <option value="">Select a teacher with the Assessor grant</option>
+        @for (t of teachers(); track t.id) {
+          <option [value]="t.id">{{ t.name ?? t.label }}</option>
+        }
+      </select>
+    </div>
+    <div class="field">
+      <label for="appointment-branch">Branch</label
+      ><select id="appointment-branch" class="native-select" formControlName="branchId">
+        <option value="">Select a branch</option>
+        @for (b of branches(); track b.id) {
+          <option [value]="b.id">{{ b.name ?? b.label }}</option>
+        }
+      </select>
+    </div>
+  </div>
+  @if (vehicleRequired() !== false) {
+    <div class="field">
+      <label for="appointment-vehicle"
+        >Vehicle{{ vehicleRequired() === null ? ' · practical assessments only' : '' }}</label
+      ><select id="appointment-vehicle" class="native-select" formControlName="vehicleId">
+        <option value="">
+          {{ vehicleRequired() ? 'Select an active vehicle' : 'No vehicle' }}
+        </option>
+        @for (v of vehicles(); track v.id) {
+          <option [value]="v.id">{{ v.label ?? v.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  <div class="form-grid">
+    <div class="field">
+      <label for="appointment-start">Starts · Vilnius</label
+      ><input id="appointment-start" pInputText type="datetime-local" formControlName="startsAt" />
+    </div>
+    <div class="field">
+      <label for="appointment-duration">Duration · minutes</label
+      ><input
+        id="appointment-duration"
+        pInputText
+        type="number"
+        min="15"
+        max="240"
+        step="5"
+        formControlName="duration"
+      />
+    </div>
+  </div>
+  <div class="field">
+    <label for="appointment-reason">Reason</label
+    ><textarea
+      pInputText
+      id="appointment-reason"
+      rows="2"
+      formControlName="reason"
+      [attr.maxlength]="reasonMax"
+      placeholder="For example: repeated final assessment after a failed attempt"
+    ></textarea>
+    @if (form.controls.reason.touched && form.controls.reason.invalid) {
+      <small class="field-error">Enter a reason of up to {{ reasonMax }} characters.</small>
+    }
+  </div>
+  @if (error()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+  <p-button
+    type="submit"
+    label="Book assessment appointment"
+    [loading]="busy()"
+    [disabled]="locked()"
+  />
+</form>

@@ -1,0 +1,94 @@
+﻿@if (historyLoading()) {
+  <p role="status">Loading reporting history…</p>
+}
+@if (historyFailed()) {
+  <div role="alert">
+    <p>Reporting history could not be loaded.</p>
+    <p-button label="Retry history" (onClick)="loadHistory()" />
+  </div>
+}
+<section class="reporting-declaration" aria-label="Manual external reporting">
+  @for (d of recorded(); track d.declarationId) {
+    <div class="feedback" role="note">
+      <div>
+        <strong>User-recorded declaration</strong>
+        <p>
+          {{ d.actorName }} declared on {{ d.declaredAt | schoolDate }} that external reporting was
+          performed manually: “{{ d.statement }}”
+        </p>
+        <p class="muted">
+          Not a verified Regitra acknowledgement and not an officially compatible import file.
+          Vairas transmitted nothing. Evidence snapshot {{ d.snapshotId.slice(0, 8) }} · declaration
+          {{ d.declarationId.slice(0, 8) }}.
+        </p>
+      </div>
+    </div>
+  }
+  <p-button
+    label="Record manual external reporting"
+    severity="secondary"
+    [text]="true"
+    (onClick)="start()"
+  />
+</section>
+
+<p-dialog
+  header="Record manual external reporting"
+  [visible]="open()"
+  (visibleChange)="!$event && open.set(false)"
+  [modal]="true"
+  styleClass="form-dialog"
+  [closable]="!busy()"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <div class="feedback error" role="note">
+      <div>
+        <strong>Vairas does not transmit anything.</strong>
+        <p>
+          This only records your own declaration that you reported this completion outside Vairas.
+          It is not a Regitra acknowledgement and does not produce an officially compatible import
+          file. It is stored with your name and the current time.
+        </p>
+      </div>
+    </div>
+    <p class="muted" aria-live="polite">
+      Evidence snapshot {{ snapshotId().slice(0, 8) }}
+      @if (evidence(); as e) {
+        · {{ e.kind === 'CompletionReport' ? 'Completion report' : e.kind }} · {{ e.status }} ·
+        {{ e.current ? 'still current' : 'no longer current — a new report is required' }}
+      } @else if (evidenceUnavailable()) {
+        · status could not be read; Learning Tracking re-checks it when you submit.
+      }
+    </p>
+    <div class="field">
+      <label for="declaration-statement">Statement</label
+      ><textarea
+        pInputText
+        id="declaration-statement"
+        rows="3"
+        formControlName="statement"
+        [attr.maxlength]="statementMax"
+        placeholder="e.g. Reported manually in the Regitra portal on 25 Nov 2026, reference …"
+      ></textarea>
+      @if (statementError(); as message) {
+        <small class="field-error">{{ message }}</small>
+      }
+    </div>
+    <label class="approval-check"
+      ><input type="checkbox" formControlName="acknowledged" /> I understand that Vairas sends
+      nothing and that this is only my declaration as administrator.</label
+    >
+    @if (form.controls.acknowledged.touched && !form.controls.acknowledged.value) {
+      <small class="field-error">Confirm the statement above to continue.</small>
+    }
+    @if (error()) {
+      <p class="field-error" role="alert">{{ error() }}</p>
+    }
+    <p-button
+      type="submit"
+      label="Record declaration"
+      [loading]="busy()"
+      [disabled]="evidence()?.current === false"
+    />
+  </form>
+</p-dialog>
