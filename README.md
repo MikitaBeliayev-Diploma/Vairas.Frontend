@@ -60,3 +60,15 @@ The GitHub Actions workflow runs lint, formatting, coverage and build on pushes 
 ## Known integration dependencies
 
 The backend must expose the new scheduling request list and saved proposal GET routes through Gateway. Assessment historical review requires the exact invalidation timestamp from Learning Tracking; ordinary recorded result corrections and history use existing API contracts. The enrollment page can recover a missing Learning Tracking programme pin from authoritative progress, but durable cross-service configuration status still belongs to the backend.
+
+## Tests and coverage
+
+```powershell
+npm ci
+npm test                  # unit/component tests (Angular + Vitest)
+npm run test:coverage     # coverage with a 70 % line threshold; output in coverage/vairas
+npm run test:theme        # Playwright theme/responsive test (needs the dev server on https://localhost:4200)
+npm run test:e2e          # live full-stack scenarios (needs the local backend stack, see Backend/local/README.md)
+```
+
+**Coverage report:** [docs/coverage/README.md](docs/coverage/README.md); JSON summary, LCOV and the browsable HTML report are in `docs/coverage/` (`docs/coverage/html/index.html`).

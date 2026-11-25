@@ -78,3 +78,7 @@ test-results/
 *.p12
 *.key
 **/appsettings.Local.json
+
+# Committed coverage reports (see docs/coverage/README.md)
+!docs/coverage/
+!docs/coverage/**
